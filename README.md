@@ -1,34 +1,36 @@
-# PoE HVPS Automation Controller
+# PoE HVPS Automation Controller (Olimex Edition)
 
-A professional-grade, PoE-powered smart controller for High-Voltage Power Supplies (HVPS). This project automates the manual trimming and monitoring of HVPS systems using an ESP32-S3 and high-precision digital potentiometers.
+A professional-grade, PoE-powered smart controller for High-Voltage Power Supplies (HVPS). This project integrates the **Olimex ESP32-POE** as a core module, providing native Ethernet connectivity and robust power extraction.
 
-## 🚀 Features
+## 🚀 Key Features
 
-- **PoE Powered**: Operates from standard PoE (802.3af/at) using a Silvertel Ag9700 module (12V or 24V).
-- **Precision Adjustment**: Dual AD5282 200kΩ digital potentiometers (256-tap) replace manual trim pots.
+- **Ethernet Native**: High-performance 10/100 Ethernet via native RMII.
+- **PoE Powered**: Fully isolated power extraction using the Olimex on-board Poe circuit.
+- **Precision Adjustment**: Dual AD5282 200kΩ digital potentiometers (256-tap) for automated trimming.
+- **Soft-Ramp Slew Rate**: All HV adjustments are "soft-ramped" (1 second for full range) to prevent sudden voltage spikes and protect sensitive equipment.
 - **Real-time Telemetry**:
-    - PoE input voltage/current monitoring (INA226).
+    - PoE voltage/current monitoring (INA226).
     - Dual 1V/1000V high-voltage readout feedback.
-- **Web Dashboard**: Modern, glassmorphic web interface hosted on the ESP32-S3 for remote control and monitoring.
-- **Hardware Integration**: High-quality screw terminals for robust connections.
+- **Web Dashboard**: Modern, offline-capable interface for remote control and monitoring.
+- **Hardware Integration**: Heavy-duty screw terminals for secure laboratory connections.
 
 ## 🛠 Hardware Configuration
 
-The PCB is universal and can be configured for two different output voltages:
-1. **12V Version**: Populate with Ag9712-FL.
-2. **24V Version**: Populate with Ag9724-FL.
+This project is designed as a custom "Baseboard" that the Olimex ESP32-POE module plugs into.
+- **Baseboard Component**: `hardware/hvps-controller.kicad_sch` [WIP].
+- **Brain**: [Olimex ESP32-POE](https://www.olimex.com/Products/IoT/ESP32/ESP32-POE/open-source-hardware).
 
 ## 📂 Project Structure
 
-- `hardware/`: KiCad schematic, PCB layout, and BOM.
-- `firmware/`: ESP32-S3 firmware (Arduino/PlatformIO).
-- `docs/`: Mechanical drawings and component datasheets.
+- `hardware/`: KiCad baseboard schematic and BOM.
+- `firmware/`: ESP32 firmware (PlatformIO).
+- `docs/`: Pinout mapping and component datasheets.
 
 ## 📝 Getting Started
 
-1. Open `hardware/hvps-controller.kicad_pro` in KiCad 8.0+.
+1. Mount the **Olimex ESP32-POE** onto the baseboard.
 2. Flash the firmware in `firmware/` using VS Code + PlatformIO.
-3. Connect to the board's IP address to access the dashboard.
+3. Access the dashboard over Ethernet (DHCP assigned IP).
 
 ---
 Created with Antigravity AI.
