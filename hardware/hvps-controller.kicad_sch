@@ -1,0 +1,20 @@
+(kicad_sch (version 20231120) (generator "kicad")
+  (uuid "d0a51980-873b-4811-9a7b-a36c56b627f3")
+
+  (paper "A4")
+
+  (lib_symbols
+    (symbol "Connector:Screw_Terminal_01x02" (in_bom yes) (on_board yes)
+      (property "Reference" "J" (at 0 2.54 0))
+      (property "Value" "Screw_Terminal_01x02" (at 0 -2.54 0))
+    )
+    (symbol "Device:R" (in_bom yes) (on_board yes)
+      (property "Reference" "R" (at 2.032 0 90))
+      (property "Value" "R" (at 0 0 90))
+    )
+  )
+
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)
