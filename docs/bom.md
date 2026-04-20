@@ -15,4 +15,4 @@
 ## Component Selection Notes
 1. **Ag9700**: Choose the version matching your target voltage (12V or 24V).
 2. **INA226 Shunt**: 10mΩ provides high resolution for the currents expected (~0.5A to 1A).
-3. **TLV9002**: Buffers the 1V/100V feedback to protect the ESP32 ADC and ensure high impedance.
+3. **TLV9002**: Buffers the 1V/1000V feedback to protect the ESP32 ADC and ensure high impedance.

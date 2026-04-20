@@ -76,7 +76,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       
       <!-- Telemetry Card -->
       <div class="card">
-        <h2>HV FEEDBACK (1V/100V)</h2>
+        <h2>HV FEEDBACK (1V/1000V)</h2>
         <div class="value" id="hv1">0<span class="unit">V</span></div>
         <div class="value" id="hv2">0<span class="unit">V</span></div>
       </div>
@@ -111,8 +111,8 @@ const char index_html[] PROGMEM = R"rawliteral(
       fetch('/status').then(r => r.json()).then(data => {
         document.getElementById('voltage').innerHTML = data.v.toFixed(2) + '<span class="unit">V</span>';
         document.getElementById('current').innerHTML = data.i.toFixed(3) + '<span class="unit">A</span>';
-        document.getElementById('hv1').innerHTML = Math.round(data.hv1 * 100) + '<span class="unit">V</span>';
-        document.getElementById('hv2').innerHTML = Math.round(data.hv2 * 100) + '<span class="unit">V</span>';
+        document.getElementById('hv1').innerHTML = Math.round(data.hv1 * 1000) + '<span class="unit">V</span>';
+        document.getElementById('hv2').innerHTML = Math.round(data.hv2 * 1000) + '<span class="unit">V</span>';
       });
     }, 1000);
   </script>

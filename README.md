@@ -8,7 +8,7 @@ A professional-grade, PoE-powered smart controller for High-Voltage Power Suppli
 - **Precision Adjustment**: Dual AD5282 200kΩ digital potentiometers (256-tap) replace manual trim pots.
 - **Real-time Telemetry**:
     - PoE input voltage/current monitoring (INA226).
-    - Dual 1V/100V high-voltage readout feedback.
+    - Dual 1V/1000V high-voltage readout feedback.
 - **Web Dashboard**: Modern, glassmorphic web interface hosted on the ESP32-S3 for remote control and monitoring.
 - **Hardware Integration**: High-quality screw terminals for robust connections.
 
