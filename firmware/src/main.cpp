@@ -5,6 +5,10 @@
 #include <Wire.h>
 #include <INA226.h>
 #include <ArduinoJson.h>
+#include <ESPmDNS.h>
+
+// --- Firmware Info ---
+#define FW_VERSION "1.0.0"
 
 // --- Hardware Pins (Olimex ESP32-POE Layout) ---
 #define I2C_SDA 13
@@ -12,32 +16,31 @@
 #define ADC_HV1 32
 #define ADC_HV2 33
 
-// Ethernet Config for Olimex ESP32-POE
-#define ETH_PHY_TYPE  ETH_PHY_LAN8720
-#define ETH_PHY_ADDR  0
-#define ETH_PHY_MDC   23
-#define ETH_PHY_MDIO  18
-#define ETH_PHY_POWER 12
-#define ETH_CLK_MODE  ETH_CLOCK_GPIO17_OUT
-
 // --- Devices ---
 INA226 INA(0x40);
 AsyncWebServer server(80);
 
 // --- State & Slew Rate ---
 struct Channel {
-  uint8_t target = 127;
+  volatile uint8_t target = 127;
   uint8_t current = 127;
   unsigned long lastStep = 0;
-  float feedback = 0;
 };
 
 Channel ch1, ch2;
-float poe_voltage = 0;
-float poe_current = 0;
-bool ina_ok = false;
 
-const unsigned long RAMP_INTERVAL = 4; // ~1 second for 0-255 sweep (256 * 4ms = 1024ms)
+// Cached sensor values (written in loop, read by web handlers)
+volatile float poe_voltage = 0;
+volatile float poe_current = 0;
+volatile float hv1_feedback = 0;
+volatile float hv2_feedback = 0;
+bool ina_ok = false;
+bool eth_connected = false;
+unsigned long lastSensorRead = 0;
+unsigned long uptime_seconds = 0;
+
+const unsigned long RAMP_INTERVAL = 4;    // ~1s for full 0-255 sweep
+const unsigned long SENSOR_INTERVAL = 500; // Read sensors every 500ms
 
 // --- AD5282 Digital Pot Driver ---
 void updateHardwarePot(uint8_t channel, uint8_t value) {
@@ -47,9 +50,10 @@ void updateHardwarePot(uint8_t channel, uint8_t value) {
   Wire.endTransmission();
 }
 
+// --- Slew Rate Controller ---
 void processSlewRate() {
   unsigned long now = millis();
-  
+
   // Channel 1
   if (ch1.current != ch1.target && now - ch1.lastStep > RAMP_INTERVAL) {
     if (ch1.current < ch1.target) ch1.current++;
@@ -57,7 +61,7 @@ void processSlewRate() {
     updateHardwarePot(0, ch1.current);
     ch1.lastStep = now;
   }
-  
+
   // Channel 2
   if (ch2.current != ch2.target && now - ch2.lastStep > RAMP_INTERVAL) {
     if (ch2.current < ch2.target) ch2.current++;
@@ -67,14 +71,56 @@ void processSlewRate() {
   }
 }
 
-// --- Dashboard HTML (No external CDNs) ---
+// --- Sensor Read (called from loop only — keeps I2C on one task) ---
+void readSensors() {
+  if (millis() - lastSensorRead < SENSOR_INTERVAL) return;
+  lastSensorRead = millis();
+
+  if (ina_ok) {
+    poe_voltage = INA.getBusVoltage();
+    poe_current = INA.getCurrent();
+  }
+  hv1_feedback = analogReadMilliVolts(ADC_HV1) / 1000.0;
+  hv2_feedback = analogReadMilliVolts(ADC_HV2) / 1000.0;
+  uptime_seconds = millis() / 1000;
+}
+
+// --- Ethernet Event Handler ---
+void onEthEvent(WiFiEvent_t event) {
+  switch (event) {
+    case ARDUINO_EVENT_ETH_START:
+      Serial.println("[ETH] Started");
+      ETH.setHostname("hvps-controller");
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP:
+      Serial.printf("[ETH] IP: %s  Link: %dMbps %s\n",
+        ETH.localIP().toString().c_str(),
+        ETH.linkSpeed(),
+        ETH.fullDuplex() ? "Full-Duplex" : "Half-Duplex");
+      eth_connected = true;
+      // Start mDNS so device is reachable at http://hvps.local
+      if (MDNS.begin("hvps")) {
+        MDNS.addService("http", "tcp", 80);
+        Serial.println("[mDNS] http://hvps.local");
+      }
+      break;
+    case ARDUINO_EVENT_ETH_DISCONNECTED:
+      Serial.println("[ETH] Disconnected");
+      eth_connected = false;
+      break;
+    default:
+      break;
+  }
+}
+
+// --- Dashboard HTML ---
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
 <head>
   <title>HVPS Controller</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --err: #ef4444; }
+    :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --err: #ef4444; --warn: #f59e0b; }
     body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
     .container { max-width: 800px; margin: auto; }
     .header { text-align: center; margin-bottom: 30px; }
@@ -90,6 +136,8 @@ const char index_html[] PROGMEM = R"rawliteral(
     .status { font-size: 0.7rem; text-align: right; margin-top: 10px; color: #64748b; }
     .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; float: right; background: #22c55e; color: #fff; }
     .badge.error { background: var(--err); }
+    .badge.ramping { background: var(--warn); }
+    .ramp-indicator { font-size: 0.7rem; color: var(--warn); display: none; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -109,12 +157,14 @@ const char index_html[] PROGMEM = R"rawliteral(
       <div class="card">
         <h2>HVPS CHANNEL 1</h2>
         <div class="slider-box"><input type="range" id="pot1" min="0" max="255" oninput="updatePot(1, this.value)"></div>
-        <div class="status">Setting: <span id="val1">--</span> / 255</div>
+        <div class="status">Target: <span id="val1">--</span> | Actual: <span id="cur1">--</span></div>
+        <div class="ramp-indicator" id="ramp1">⏳ Ramping...</div>
       </div>
       <div class="card">
         <h2>HVPS CHANNEL 2</h2>
         <div class="slider-box"><input type="range" id="pot2" min="0" max="255" oninput="updatePot(2, this.value)"></div>
-        <div class="status">Setting: <span id="val2">--</span> / 255</div>
+        <div class="status">Target: <span id="val2">--</span> | Actual: <span id="cur2">--</span></div>
+        <div class="ramp-indicator" id="ramp2">⏳ Ramping...</div>
       </div>
     </div>
   </div>
@@ -131,13 +181,22 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById('hv1').innerHTML = Math.round(data.hv1 * 1000) + '<span class="unit">V</span>';
         document.getElementById('hv2').innerHTML = Math.round(data.hv2 * 1000) + '<span class="unit">V</span>';
         const st = document.getElementById('p-status');
-        if(!data.ok) { st.innerHTML = 'ERROR'; st.className = 'badge error'; }
+        if(!data.ok) { st.innerHTML = 'SENSOR ERROR'; st.className = 'badge error'; }
         else { st.innerHTML = 'ONLINE'; st.className = 'badge'; }
+        // Show current (actual) pot positions
+        document.getElementById('cur1').innerHTML = data.c1;
+        document.getElementById('cur2').innerHTML = data.c2;
+        // Show ramping indicators
+        document.getElementById('ramp1').style.display = (data.p1 !== data.c1) ? 'block' : 'none';
+        document.getElementById('ramp2').style.display = (data.p2 !== data.c2) ? 'block' : 'none';
         if(firstLoad) {
           document.getElementById('pot1').value = data.p1; document.getElementById('val1').innerHTML = data.p1;
           document.getElementById('pot2').value = data.p2; document.getElementById('val2').innerHTML = data.p2;
           firstLoad = false;
         }
+      }).catch(() => {
+        document.getElementById('p-status').innerHTML = 'OFFLINE';
+        document.getElementById('p-status').className = 'badge error';
       });
     }, 1000);
   </script>
@@ -145,30 +204,50 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
+// --- Setup ---
 void setup() {
   Serial.begin(115200);
+  Serial.printf("\n[HVPS] Firmware v%s\n", FW_VERSION);
+
+  // Register Ethernet events BEFORE ETH.begin()
+  WiFi.onEvent(onEthEvent);
+
+  // I2C
   Wire.begin(I2C_SDA, I2C_SCL);
 
-  // Ethernet Initialization
-  ETH.begin(ETH_PHY_ADDR, ETH_PHY_POWER, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_TYPE, ETH_CLK_MODE);
-  
-  // INA226 Initialization
-  ina_ok = INA.begin();
-  if (ina_ok) INA.setMaxCurrentShunt(2.0, 0.01);
+  // Ethernet — board definition handles PHY config
+  ETH.begin();
 
-  // Web Server Routes
+  // INA226
+  ina_ok = INA.begin();
+  if (ina_ok) {
+    INA.setMaxCurrentShunt(2.0, 0.01); // 2A max, 10mOhm shunt
+    Serial.println("[INA226] OK");
+  } else {
+    Serial.println("[INA226] NOT FOUND — power monitoring disabled");
+  }
+
+  // Initialize pots to safe mid-position
+  updateHardwarePot(0, ch1.current);
+  updateHardwarePot(1, ch2.current);
+
+  // --- Web Server Routes ---
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html);
   });
 
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
     JsonDocument doc;
-    doc["v"] = INA.getBusVoltage();
-    doc["i"] = INA.getCurrent();
-    doc["hv1"] = analogReadMilliVolts(ADC_HV1) / 1000.0;
-    doc["hv2"] = analogReadMilliVolts(ADC_HV2) / 1000.0;
+    // Serve cached sensor values (no I2C in this context)
+    doc["v"] = poe_voltage;
+    doc["i"] = poe_current;
+    doc["hv1"] = hv1_feedback;
+    doc["hv2"] = hv2_feedback;
     doc["p1"] = ch1.target;
     doc["p2"] = ch2.target;
+    doc["c1"] = ch1.current;  // Actual position
+    doc["c2"] = ch2.current;
     doc["ok"] = ina_ok;
     String res;
     serializeJson(doc, res);
@@ -176,21 +255,47 @@ void setup() {
   });
 
   server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request){
-    if (request->hasParam("pot") && request->hasParam("val")) {
-      int p = request->getParam("pot")->value().toInt();
-      int v = constrain(request->getParam("val")->value().toInt(), 0, 255);
-      if (p == 1) ch1.target = v;
-      else if (p == 2) ch2.target = v;
+    if (!request->hasParam("pot") || !request->hasParam("val")) {
+      request->send(400, "text/plain", "Missing parameters");
+      return;
+    }
+    int p = request->getParam("pot")->value().toInt();
+    int v = constrain(request->getParam("val")->value().toInt(), 0, 255);
+    if (p == 1) {
+      ch1.target = v;
+      request->send(200, "text/plain", "OK");
+    } else if (p == 2) {
+      ch2.target = v;
       request->send(200, "text/plain", "OK");
     } else {
-      request->send(400, "text/plain", "Bad Request");
+      request->send(400, "text/plain", "Invalid channel (1 or 2)");
     }
   });
 
+  server.on("/info", HTTP_GET, [](AsyncWebServerRequest *request){
+    JsonDocument doc;
+    doc["fw"] = FW_VERSION;
+    doc["uptime"] = uptime_seconds;
+    doc["mac"] = ETH.macAddress();
+    doc["ip"] = ETH.localIP().toString();
+    doc["eth"] = eth_connected;
+    doc["ina"] = ina_ok;
+    doc["ch1_target"] = ch1.target;
+    doc["ch1_current"] = ch1.current;
+    doc["ch2_target"] = ch2.target;
+    doc["ch2_current"] = ch2.current;
+    String res;
+    serializeJson(doc, res);
+    request->send(200, "application/json", res);
+  });
+
   server.begin();
+  Serial.println("[HTTP] Server started");
 }
 
+// --- Main Loop (all I2C and ADC access happens here) ---
 void loop() {
   processSlewRate();
+  readSensors();
   delay(1);
 }
