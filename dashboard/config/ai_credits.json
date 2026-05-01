@@ -1,0 +1,27 @@
+{
+  "last_updated": "2026-05-01T20:00:00Z",
+  "models": {
+    "claude_4_6_opus": {
+      "display_name": "Claude 4.6 (Thinking)",
+      "credits_remaining": 0,
+      "total_budget": 50.00,
+      "status": "DEPLETED",
+      "priority": "HIGH"
+    },
+    "gemini_3_1_pro": {
+      "display_name": "Gemini 3.1 Pro (High)",
+      "credits_remaining": 0,
+      "total_budget": 100.00,
+      "status": "DEPLETED",
+      "priority": "MEDIUM"
+    },
+    "gemini_3_flash": {
+      "display_name": "Gemini 3 Flash",
+      "credits_remaining": 1500,
+      "total_budget": 2000,
+      "status": "HEALTHY",
+      "priority": "LOW"
+    }
+  },
+  "burn_rate_history": []
+}

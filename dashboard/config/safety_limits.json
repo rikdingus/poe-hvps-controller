@@ -1,0 +1,11 @@
+{
+  "global_emergency_stop": false,
+  "default_limits": {
+    "max_hv_volts": 2500,
+    "max_poe_current_amps": 1.5,
+    "max_temp_c": 65
+  },
+  "channel_overrides": {
+    "HVPS-07": { "max_hv_volts": 1000, "note": "Sensitive experimental load" }
+  }
+}

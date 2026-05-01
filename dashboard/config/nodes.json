@@ -1,0 +1,12 @@
+[
+  {"id": 1, "name": "HVPS-01", "ip": "192.168.1.221", "location": "Rack A"},
+  {"id": 2, "name": "HVPS-02", "ip": "192.168.1.222", "location": "Rack A"},
+  {"id": 3, "name": "HVPS-03", "ip": "192.168.1.223", "location": "Rack A"},
+  {"id": 4, "name": "HVPS-04", "ip": "192.168.1.224", "location": "Rack B"},
+  {"id": 5, "name": "HVPS-05", "ip": "192.168.1.225", "location": "Rack B"},
+  {"id": 6, "name": "HVPS-06", "ip": "192.168.1.226", "location": "Rack B"},
+  {"id": 7, "name": "HVPS-07", "ip": "192.168.1.227", "location": "Rack C"},
+  {"id": 8, "name": "HVPS-08", "ip": "192.168.1.228", "location": "Rack C"},
+  {"id": 9, "name": "HVPS-09", "ip": "192.168.1.229", "location": "Rack C"},
+  {"id": 10, "name": "HVPS-10", "ip": "192.168.1.230", "location": "Rack D"}
+]

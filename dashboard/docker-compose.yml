@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  # Premium Master Dashboard
+  dashboard:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NODES_CONFIG=/app/config/nodes.json
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
+
+  # Home Assistant for automation and long-term logging
+  homeassistant:
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - ./ha-config:/config
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    network_mode: host
