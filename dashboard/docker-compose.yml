@@ -1,42 +1,63 @@
 version: '3.8'
 
 services:
-  # Premium Master Dashboard
-  dashboard:
-    build: .
+  # Master Dashboard & Telemetry Proxy
+  app:
+    build: ./app
+    container_name: hvps-master-app
+    restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - NODES_CONFIG=/app/config/nodes.json
     volumes:
-      - ./config:/app/config
-    restart: unless-stopped
+      - ./config:/config
+    networks:
+      - hvps-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/nodes"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # Home Assistant for automation and long-term logging
   homeassistant:
     image: "ghcr.io/home-assistant/home-assistant:stable"
+    container_name: hvps-homeassistant
+    restart: unless-stopped
     volumes:
       - ./ha-config:/config
-      - /etc/localtime:/etc/localtime:ro
-    restart: unless-stopped
     network_mode: host
 
-  # RustDesk Relay (Self-Hosted)
+  # RustDesk Relay (HBBS)
   hbbs:
     image: rustdesk/rustdesk-server:latest
-    container_name: hbbs
-    command: hbbs
-    network_mode: host
+    container_name: hvps-hbbs
+    restart: unless-stopped
+    command: hbbs -r hvps.local:21117
     volumes:
       - ./rustdesk-data:/root
-    restart: unless-stopped
+    networks:
+      - hvps-net
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
 
+  # RustDesk Relay (HBR)
   hbr:
     image: rustdesk/rustdesk-server:latest
-    container_name: hbr
+    container_name: hvps-hbr
+    restart: unless-stopped
     command: hbr
-    network_mode: host
     volumes:
       - ./rustdesk-data:/root
-    restart: unless-stopped
+    networks:
+      - hvps-net
+    ports:
+      - "21117:21117"
+      - "21119:21119"
+
+networks:
+  hvps-net:
+    driver: bridge

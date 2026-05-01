@@ -1,10 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Zap, ShieldAlert, Cpu } from 'lucide-react';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
 
 const NodeCard = ({ node }) => {
   const { nodeId, status, channels, power, ups, alert } = node;
+  const [history, setHistory] = useState([]);
   
+  const mainKv = channels[0].current_kv;
+  const isCritical = alert || mainKv > 2.8;
+
+  useEffect(() => {
+    if (status === 'online') {
+      setHistory(prev => [...prev.slice(-19), { val: mainKv }]);
+    }
+  }, [mainKv, status]);
+
   // Calculate percentage for the gauge (0.5kV - 3.0kV)
   const calculatePct = (kv) => {
     const min = 0.5;
@@ -13,9 +24,7 @@ const NodeCard = ({ node }) => {
     return Math.min(Math.max(pct, 0), 100);
   };
 
-  const mainKv = channels[0].current_kv;
   const gaugePct = calculatePct(mainKv);
-  const isCritical = alert || mainKv > 2.8;
 
   return (
     <motion.div 
@@ -27,35 +36,35 @@ const NodeCard = ({ node }) => {
         boxShadow: isCritical ? '0 0 20px rgba(239, 68, 68, 0.2)' : 'none'
       }}
       whileHover={{ y: -5, transition: { duration: 0.2 } }}
-      className={`relative overflow-hidden glass rounded-3xl p-6 border group transition-colors duration-500`}
+      className={`relative overflow-hidden glass rounded-[32px] p-7 border group transition-all duration-500`}
     >
-      {/* Background Pulse for Active/Alert Nodes */}
+      {/* Background Pulse */}
       {status === 'online' && (
-        <div className={`absolute top-0 right-0 w-32 h-32 blur-[60px] rounded-full -mr-16 -mt-16 animate-pulse ${isCritical ? 'bg-red-500/20' : 'bg-cyan-500/5'}`} />
+        <div className={`absolute top-0 right-0 w-40 h-40 blur-[80px] rounded-full -mr-20 -mt-20 animate-pulse ${isCritical ? 'bg-red-500/20' : 'bg-cyan-500/10'}`} />
       )}
 
       {/* Header */}
-      <div class="flex justify-between items-start mb-6">
+      <div class="flex justify-between items-start mb-8">
         <div>
-          <h3 class="text-xs uppercase tracking-[0.2em] text-white/40 font-bold mb-1">Node Unit</h3>
-          <div class="flex items-center gap-2">
-            <span class="text-2xl font-bold tracking-tighter">0{nodeId}</span>
-            <span class={`w-1.5 h-1.5 rounded-full ${isCritical ? 'bg-red-500 animate-ping' : (status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-white/20')}`}></span>
+          <h3 class="text-[10px] uppercase tracking-[0.3em] text-white/30 font-black mb-1">Station Node</h3>
+          <div class="flex items-center gap-3">
+            <span class="text-3xl font-black tracking-tighter italic">0{nodeId}</span>
+            <span class={`w-2 h-2 rounded-full ${isCritical ? 'bg-red-500 animate-ping' : (status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-white/10')}`}></span>
           </div>
         </div>
-        <div class={`p-2 rounded-xl border ${isCritical ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'}`}>
-          {isCritical ? <ShieldAlert size={16} /> : <Cpu size={16} />}
+        <div className={`p-3 rounded-2xl border transition-all ${isCritical ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/20'}`}>
+          {isCritical ? <ShieldAlert size={18} /> : <Cpu size={18} />}
         </div>
       </div>
 
-      {/* Main Gauge */}
-      <div class="relative flex flex-col items-center justify-center mb-8 py-4">
-        <svg viewBox="0 0 100 60" class="w-full max-w-[200px]">
+      {/* Main Gauge & Sparkline */}
+      <div class="relative flex flex-col items-center justify-center mb-10 py-2">
+        <svg viewBox="0 0 100 60" class="w-full max-w-[220px] drop-shadow-[0_0_15px_rgba(34,211,238,0.1)]">
           <path
             d="M 10 50 A 40 40 0 0 1 90 50"
             fill="none"
-            stroke="rgba(255,255,255,0.05)"
-            strokeWidth="8"
+            stroke="rgba(255,255,255,0.03)"
+            strokeWidth="10"
             strokeLinecap="round"
           />
           <motion.path
@@ -64,15 +73,24 @@ const NodeCard = ({ node }) => {
             d="M 10 50 A 40 40 0 0 1 90 50"
             fill="none"
             stroke={isCritical ? '#f87171' : '#22d3ee'}
-            strokeWidth="8"
+            strokeWidth="10"
             strokeLinecap="round"
             transition={{ duration: 0.5, ease: "easeOut" }}
           />
         </svg>
         
-        <div class="absolute inset-0 flex flex-col items-center justify-center pt-4">
-          <span className={`text-4xl font-bold tracking-tighter leading-none transition-colors ${isCritical ? 'text-red-400' : 'text-white'}`}>{mainKv.toFixed(2)}</span>
-          <span class="text-[10px] uppercase tracking-widest text-white/30 font-bold mt-1">kV Output</span>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pt-6">
+          <span className={`text-5xl font-black tracking-tighter leading-none transition-colors ${isCritical ? 'text-red-400' : 'text-white'}`}>{mainKv.toFixed(2)}</span>
+          <span class="text-[10px] uppercase tracking-[0.2em] text-white/30 font-black mt-2">kV Output</span>
+        </div>
+
+        {/* Mini Sparkline Overlaid on Gauge */}
+        <div className="absolute bottom-2 w-full h-8 px-12 opacity-30">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={history}>
+              <Line type="monotone" dataKey="val" stroke={isCritical ? '#ef4444' : '#22d3ee'} strokeWidth={2} dot={false} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
