@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Activity, Zap, ShieldAlert, Cpu } from 'lucide-react';
 
 const NodeCard = ({ node }) => {
-  const { nodeId, status, channels, power, ups } = node;
+  const { nodeId, status, channels, power, ups, alert } = node;
   
   // Calculate percentage for the gauge (0.5kV - 3.0kV)
   const calculatePct = (kv) => {
@@ -15,17 +15,23 @@ const NodeCard = ({ node }) => {
 
   const mainKv = channels[0].current_kv;
   const gaugePct = calculatePct(mainKv);
+  const isCritical = alert || mainKv > 2.8;
 
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ 
+        opacity: 1, 
+        y: 0,
+        borderColor: isCritical ? 'rgba(239, 68, 68, 0.5)' : 'rgba(255, 255, 255, 0.1)',
+        boxShadow: isCritical ? '0 0 20px rgba(239, 68, 68, 0.2)' : 'none'
+      }}
       whileHover={{ y: -5, transition: { duration: 0.2 } }}
-      className="relative overflow-hidden glass rounded-3xl p-6 border border-white/10 group"
+      className={`relative overflow-hidden glass rounded-3xl p-6 border group transition-colors duration-500`}
     >
-      {/* Background Pulse for Active Nodes */}
+      {/* Background Pulse for Active/Alert Nodes */}
       {status === 'online' && (
-        <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 blur-[60px] rounded-full -mr-16 -mt-16 animate-pulse" />
+        <div className={`absolute top-0 right-0 w-32 h-32 blur-[60px] rounded-full -mr-16 -mt-16 animate-pulse ${isCritical ? 'bg-red-500/20' : 'bg-cyan-500/5'}`} />
       )}
 
       {/* Header */}
@@ -34,18 +40,17 @@ const NodeCard = ({ node }) => {
           <h3 class="text-xs uppercase tracking-[0.2em] text-white/40 font-bold mb-1">Node Unit</h3>
           <div class="flex items-center gap-2">
             <span class="text-2xl font-bold tracking-tighter">0{nodeId}</span>
-            <span class={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+            <span class={`w-1.5 h-1.5 rounded-full ${isCritical ? 'bg-red-500 animate-ping' : (status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-white/20')}`}></span>
           </div>
         </div>
-        <div class="p-2 rounded-xl bg-white/5 border border-white/10">
-          <Cpu size={16} className="text-white/40" />
+        <div class={`p-2 rounded-xl border ${isCritical ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'}`}>
+          {isCritical ? <ShieldAlert size={16} /> : <Cpu size={16} />}
         </div>
       </div>
 
       {/* Main Gauge */}
       <div class="relative flex flex-col items-center justify-center mb-8 py-4">
         <svg viewBox="0 0 100 60" class="w-full max-w-[200px]">
-          {/* Background Arc */}
           <path
             d="M 10 50 A 40 40 0 0 1 90 50"
             fill="none"
@@ -53,22 +58,21 @@ const NodeCard = ({ node }) => {
             strokeWidth="8"
             strokeLinecap="round"
           />
-          {/* Active Progress Arc */}
           <motion.path
             initial={{ pathLength: 0 }}
             animate={{ pathLength: gaugePct / 100 }}
             d="M 10 50 A 40 40 0 0 1 90 50"
             fill="none"
-            stroke={mainKv > 2.5 ? '#f87171' : '#22d3ee'}
+            stroke={isCritical ? '#f87171' : '#22d3ee'}
             strokeWidth="8"
             strokeLinecap="round"
-            transition={{ duration: 1.5, ease: "easeOut" }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
           />
         </svg>
         
         <div class="absolute inset-0 flex flex-col items-center justify-center pt-4">
-          <span class="text-4xl font-bold tracking-tighter leading-none">{mainKv.toFixed(2)}</span>
-          <span class="text-[10px] uppercase tracking-widest text-cyan-400 font-bold mt-1">kV Output</span>
+          <span className={`text-4xl font-bold tracking-tighter leading-none transition-colors ${isCritical ? 'text-red-400' : 'text-white'}`}>{mainKv.toFixed(2)}</span>
+          <span class="text-[10px] uppercase tracking-widest text-white/30 font-bold mt-1">kV Output</span>
         </div>
       </div>
 
