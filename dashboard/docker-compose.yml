@@ -21,3 +21,18 @@ services:
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
     network_mode: host
+
+  # RustDesk Relay (Self-Hosted)
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: hbbs
+    command: hbbs
+    network_mode: host
+    restart: unless-stopped
+
+  hbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: hbr
+    command: hbr
+    network_mode: host
+    restart: unless-stopped
