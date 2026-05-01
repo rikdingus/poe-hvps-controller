@@ -32,8 +32,32 @@ const pollNodes = async () => {
         clearTimeout(timeoutId);
         
         if (res.ok) {
-          const status = await res.json();
-          nodeCache[node.id] = { ...node, status: 'online', data: status, lastSeen: new Date() };
+          const rawStatus = await res.json();
+          // Map raw hardware status to the high-level Interface Contract
+          nodeCache[node.id] = { 
+            nodeId: node.id,
+            name: node.name,
+            location: node.location,
+            status: 'online', 
+            channels: [
+              { 
+                ch: 1, 
+                target_kv: rawStatus.p1 / 1000, // Convert mV to kV
+                current_kv: (rawStatus.hv1 * rawStatus.hv1g + rawStatus.hv1o) / 1000,
+                limit_kv: 3.0 
+              }
+            ],
+            power: { 
+              v: rawStatus.v, 
+              a: rawStatus.i, 
+              w: rawStatus.v * rawStatus.i 
+            },
+            ups: { 
+              battery_pct: rawStatus.batt || 100, 
+              source: rawStatus.v > 30 ? 'dc' : 'battery' 
+            },
+            lastSeen: new Date() 
+          };
         } else {
           nodeCache[node.id] = { ...node, status: 'error', lastSeen: new Date() };
         }
