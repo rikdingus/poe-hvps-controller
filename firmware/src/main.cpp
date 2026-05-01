@@ -10,7 +10,7 @@
 // --- Firmware Info ---
 #define FW_VERSION "1.0.0"
 
-// --- Hardware Pins (Olimex ESP32-POE Layout) ---
+// --- Hardware Pins (Olimex ESP32-POE-ISO-IND) ---
 #define I2C_SDA 13
 #define I2C_SCL 16
 #define ADC_HV1 32

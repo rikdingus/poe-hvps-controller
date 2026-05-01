@@ -1,30 +1,68 @@
-# PoE HVPS Automation Controller - Code Review Context
+# PoE HVPS Controller — LLM Code Review Context
 
-This document is compiled specifically to provide full context to an LLM (like Claude) for code review and architectural understanding of the `poe-hvps-controller` project.
-
-## 1. Project Overview
-This project is a professional-grade, PoE-powered smart controller for High-Voltage Power Supplies (HVPS). It uses the **Olimex ESP32-POE-ISO-IND** (Industrial, Isolated) board to provide native wired Ethernet (no Wi-Fi) and 3000VDC galvanic isolation between the PoE circuit and the logic side.
-
-### Core Features:
-- **Slew-Rate Controlled Ramping:** Adjusts HV outputs gradually (~1s sweep) using digital potentiometers to protect downstream hardware.
-- **Wired Ethernet API:** Hosts an asynchronous web server and dashboard UI.
-- **Hardware Telemetry:** Monitors PoE power (INA226) and reads 0-3V feedback from the HVPS.
-
-## 2. Hardware & Pinout
-- **I2C Bus:** GPIO `13` (SDA), GPIO `16` (SCL)
-- **INA226 (PoE Power Monitor):** Address `0x40`
-- **AD5282 (Digital Potentiometer):** Address `0x2C`
-- **HV Feedback ADCs:** GPIO `32` (CH1), GPIO `33` (CH2). Reads 0-3.3V, mapped as 1V = 1000V.
-
-## 3. Web API Endpoints
-- `GET /` - Returns the interactive dashboard.
-- `GET /status` - Returns live JSON telemetry (`v`, `i`, `hv1`, `hv2`, `p1`, `p2`, `c1`, `c2`, `ok`).
-- `GET /set?pot=1&val=128` - Sets the target potentiometer value (0-255).
-- `GET /info` - Returns device stats, MAC address, and uptime.
+> **Purpose:** This document consolidates the full project context into a single file for AI-assisted code review. It contains inline source code, verified API responses from the live board, and architectural notes.
+>
+> **Board:** Olimex ESP32-POE-ISO-IND (Industrial, Isolated)  
+> **Last Verified:** 2026-05-01 against firmware v1.0.0 running on `192.168.1.221`
 
 ---
 
-## 4. Source Code
+## 1. Project Summary
+
+A PoE-powered Ethernet controller for High-Voltage Power Supplies. Uses I2C digital potentiometers (AD5282) with slew-rate ramping to adjust HVPS output, INA226 for PoE power monitoring, and buffered ADC inputs for 0–3V HV feedback (1V = 1000V). Serves a web dashboard and JSON API over wired Ethernet with mDNS discovery.
+
+## 2. Hardware
+
+- **I2C SDA:** GPIO 13 · **I2C SCL:** GPIO 16
+- **INA226:** Address `0x40` (PoE bus voltage + shunt current, 10mΩ shunt, 2A max)
+- **AD5282:** Address `0x2C` (Dual 200kΩ, 256-tap digital pot)
+- **ADC HV1:** GPIO 32 · **ADC HV2:** GPIO 33 (0–3.3V via TLV9002 buffer + 1kΩ + TVS clamp)
+- **Ethernet PHY:** LAN8720 (internal to Olimex module, consumes GPIO 0,12,17,18,19,21,22,23,25,26,27)
+
+## 3. Verified API Responses (Live Board)
+
+### `GET /status`
+```json
+{"v":0,"i":0,"hv1":0.625,"hv2":0.275,"p1":127,"p2":127,"c1":127,"c2":127,"ok":false}
+```
+*INA226 not connected (ok=false). ADC floating (noise from USB bus).*
+
+### `GET /info`
+```json
+{"fw":"1.0.0","uptime":736,"mac":"EC:C9:FF:BA:8D:AB","ip":"192.168.1.221","eth":true,"ina":false,"ch1_target":127,"ch1_current":127,"ch2_target":127,"ch2_current":127}
+```
+
+### `GET /set?pot=1&val=200` → `OK`
+### `GET /set?pot=3&val=100` → `Invalid channel (1 or 2)` (400)
+
+## 4. Build Output (Verified)
+
+```
+Platform: Espressif 32 (6.13.0) > OLIMEX ESP32-PoE-ISO
+RAM:   [=         ]  14.1% (used 46352 bytes from 327680 bytes)
+Flash: [=======   ]  67.5% (used 884777 bytes from 1310720 bytes)
+========================= [SUCCESS] Took 24.39 seconds =========================
+```
+
+## 5. Key Architecture Notes
+
+- **Single-task I2C:** All I2C/ADC reads happen in `loop()`. Web handlers only read cached `volatile` globals.
+- **Slew ramping:** `current` increments toward `target` by 1 step every 4ms (~1s full sweep).
+- **Graceful INA226 failure:** `ina_ok=false` → voltage/current stay 0, dashboard shows SENSOR ERROR badge, everything else works.
+- **PROGMEM dashboard:** Entire HTML/CSS/JS is a flash literal. No filesystem needed.
+
+## 6. Known Issues for Review
+
+1. `volatile float` reads from the async web task are not truly atomic (32-bit FPU tearing risk). Acceptable for monitoring, not for safety-critical reads.
+2. No authentication on web API.
+3. No OTA update support.
+4. No persistent pot state across reboots (resets to 127).
+5. No CORS headers for cross-origin dashboard embedding.
+6. The `/set` endpoint uses `GET` method — should arguably be `POST` for state-changing operations.
+
+---
+
+## 7. Source Code
 
 ### `platformio.ini`
 ```ini
@@ -54,7 +92,7 @@ lib_deps =
 // --- Firmware Info ---
 #define FW_VERSION "1.0.0"
 
-// --- Hardware Pins (Olimex ESP32-POE Layout) ---
+// --- Hardware Pins (Olimex ESP32-POE-ISO-IND) ---
 #define I2C_SDA 13
 #define I2C_SCL 16
 #define ADC_HV1 32
@@ -142,7 +180,6 @@ void onEthEvent(WiFiEvent_t event) {
         ETH.linkSpeed(),
         ETH.fullDuplex() ? "Full-Duplex" : "Half-Duplex");
       eth_connected = true;
-      // Start mDNS so device is reachable at http://hvps.local
       if (MDNS.begin("hvps")) {
         MDNS.addService("http", "tcp", 80);
         Serial.println("[mDNS] http://hvps.local");
@@ -157,7 +194,7 @@ void onEthEvent(WiFiEvent_t event) {
   }
 }
 
-// --- Dashboard HTML ---
+// --- Dashboard HTML (stored in flash via PROGMEM) ---
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
 <head>
@@ -227,10 +264,8 @@ const char index_html[] PROGMEM = R"rawliteral(
         const st = document.getElementById('p-status');
         if(!data.ok) { st.innerHTML = 'SENSOR ERROR'; st.className = 'badge error'; }
         else { st.innerHTML = 'ONLINE'; st.className = 'badge'; }
-        // Show current (actual) pot positions
         document.getElementById('cur1').innerHTML = data.c1;
         document.getElementById('cur2').innerHTML = data.c2;
-        // Show ramping indicators
         document.getElementById('ramp1').style.display = (data.p1 !== data.c1) ? 'block' : 'none';
         document.getElementById('ramp2').style.display = (data.p2 !== data.c2) ? 'block' : 'none';
         if(firstLoad) {
@@ -253,29 +288,20 @@ void setup() {
   Serial.begin(115200);
   Serial.printf("\n[HVPS] Firmware v%s\n", FW_VERSION);
 
-  // Register Ethernet events BEFORE ETH.begin()
   WiFi.onEvent(onEthEvent);
-
-  // I2C
   Wire.begin(I2C_SDA, I2C_SCL);
-
-  // Ethernet — board definition handles PHY config
   ETH.begin();
 
-  // INA226
   ina_ok = INA.begin();
   if (ina_ok) {
-    INA.setMaxCurrentShunt(2.0, 0.01); // 2A max, 10mOhm shunt
+    INA.setMaxCurrentShunt(2.0, 0.01);
     Serial.println("[INA226] OK");
   } else {
     Serial.println("[INA226] NOT FOUND — power monitoring disabled");
   }
 
-  // Initialize pots to safe mid-position
   updateHardwarePot(0, ch1.current);
   updateHardwarePot(1, ch2.current);
-
-  // --- Web Server Routes ---
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html);
@@ -283,14 +309,13 @@ void setup() {
 
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
     JsonDocument doc;
-    // Serve cached sensor values (no I2C in this context)
     doc["v"] = poe_voltage;
     doc["i"] = poe_current;
     doc["hv1"] = hv1_feedback;
     doc["hv2"] = hv2_feedback;
     doc["p1"] = ch1.target;
     doc["p2"] = ch2.target;
-    doc["c1"] = ch1.current;  // Actual position
+    doc["c1"] = ch1.current;
     doc["c2"] = ch2.current;
     doc["ok"] = ina_ok;
     String res;
