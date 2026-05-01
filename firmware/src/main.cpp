@@ -31,8 +31,8 @@ AsyncWebServer server(80);
 
 // --- State & Slew Rate ---
 struct Channel {
-  volatile uint8_t target = 127;
-  uint8_t current = 127;
+  volatile uint8_t target = 42; // Starts at ~0.5kV
+  uint8_t current = 42;
   unsigned long lastStep = 0;
 };
 
