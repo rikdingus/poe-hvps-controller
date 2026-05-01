@@ -91,9 +91,15 @@ void readSensors() {
   }
   float hv1_raw = analogReadMilliVolts(ADC_HV1) / 1000.0;
   float hv2_raw = analogReadMilliVolts(ADC_HV2) / 1000.0;
-  hv1_feedback = hv1_raw;  // raw volts (0-3.3V) — calibration applied in display
+  hv1_feedback = hv1_raw; 
   hv2_feedback = hv2_raw;
   uptime_seconds = millis() / 1000;
+
+  // Log telemetry for testing
+  Serial.printf("[HVPS] CH1: %.2f kV | CH2: %.2f kV | PoE: %.2fV @ %.2fA\n", 
+    hv1_feedback * HV1_CAL_GAIN / 1000.0, 
+    hv2_feedback * HV2_CAL_GAIN / 1000.0, 
+    poe_voltage, poe_current);
 }
 
 // --- Ethernet Event Handler ---
@@ -223,11 +229,29 @@ void setup() {
   // Register Ethernet events BEFORE ETH.begin()
   WiFi.onEvent(onEthEvent);
 
-  // I2C
-  Wire.begin(I2C_SDA, I2C_SCL);
+  // I2C (Pin Swap Test: SDA=16, SCL=13, Slow Clock)
+  Wire.begin(16, 13, 100000); 
+  pinMode(16, INPUT_PULLUP);
+  pinMode(13, INPUT_PULLUP);
+
+  delay(5000); // Wait for peripherals to stabilize
 
   // Ethernet — board definition handles PHY config
   ETH.begin();
+
+  // I2C Scanner
+  Serial.println("[I2C] Scanning...");
+  byte error, address;
+  int nDevices = 0;
+  for(address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.printf("[I2C] Device found at 0x%02X\n", address);
+      nDevices++;
+    }
+  }
+  if (nDevices == 0) Serial.println("[I2C] NO DEVICES FOUND");
 
   // INA226
   ina_ok = INA.begin();
@@ -235,7 +259,7 @@ void setup() {
     INA.setMaxCurrentShunt(2.0, 0.01); // 2A max, 10mOhm shunt
     Serial.println("[INA226] OK");
   } else {
-    Serial.println("[INA226] NOT FOUND — power monitoring disabled");
+    Serial.println("[INA226] NOT FOUND");
   }
 
   // Initialize pots to safe mid-position
