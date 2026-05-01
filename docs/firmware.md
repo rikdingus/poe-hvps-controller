@@ -2,7 +2,7 @@
 
 > **Board:** Olimex ESP32-POE-ISO-IND  
 > **Framework:** Arduino (ESP32 Arduino Core 2.x via PlatformIO)  
-> **Firmware Version:** 1.0.0
+> **Firmware Version:** 1.1.0
 
 ## Overview
 
@@ -72,8 +72,8 @@ Tested build output (PlatformIO, Release mode):
 
 | Resource | Used | Available | Usage |
 | :--- | :--- | :--- | :--- |
-| **RAM** | 46,352 bytes | 327,680 bytes | 14.1% |
-| **Flash** | 884,777 bytes | 1,310,720 bytes | 67.5% |
+| **RAM** | 49,800 bytes | 327,680 bytes | 15.2% |
+| **Flash** | 918,217 bytes | 1,310,720 bytes | 70.1% |
 
 ## Concurrency & Thread Safety
 
@@ -142,10 +142,32 @@ Returns device metadata. Uptime is updated every 500ms.
 }
 ```
 
+## HV Feedback Calibration
+
+The firmware includes per-channel gain and offset calibration constants:
+
+```cpp
+#define HV1_CAL_GAIN   1000.0  // 1V ADC = 1000V HV output
+#define HV1_CAL_OFFSET 0.0
+#define HV2_CAL_GAIN   1000.0
+#define HV2_CAL_OFFSET 0.0
+```
+
+The raw ADC voltage (0–3.3V) is sent in the `/status` JSON along with the calibration values (`hv1g`, `hv1o`, `hv2g`, `hv2o`). The dashboard applies the conversion: `displayed_voltage = raw * gain + offset`. Adjust the `#define` values after measuring with a known HV reference.
+
+## OTA (Over-The-Air) Updates
+
+ArduinoOTA is enabled on boot. To flash wirelessly:
+
+```bash
+pio run --target upload --upload-port hvps-controller.local
+```
+
+The device advertises itself as `hvps-controller` on the network. During an OTA update, the slew rate controller and sensor polling pause until the reboot completes.
+
 ## Known Limitations
 
-1. **No OTA update support.** Firmware updates require a USB connection. OTA can be added in a future version.
-2. **No authentication.** The web dashboard and API are unauthenticated. This is acceptable for isolated lab networks but should be addressed before deployment on shared networks.
-3. **No persistent state.** Pot positions reset to 127 (mid-point) on every power cycle. NVS-based persistence could be added.
-4. **No CORS headers.** Cross-origin requests from external dashboards will be blocked by browsers. Add `Access-Control-Allow-Origin: *` header if needed.
-5. **Float atomicity.** As noted above, `volatile float` reads are not guaranteed atomic. Acceptable for monitoring but not for safety-critical decisions.
+1. **No authentication.** The web dashboard and API are unauthenticated. Acceptable for isolated lab networks but should be addressed before deployment on shared networks.
+2. **No persistent state.** Pot positions reset to 127 (mid-point) on every power cycle. NVS-based persistence could be added.
+3. **No CORS headers.** Cross-origin requests from external dashboards will be blocked by browsers. Add `Access-Control-Allow-Origin: *` header if needed.
+4. **Float atomicity.** As noted above, `volatile float` reads are not guaranteed atomic. Acceptable for monitoring but not for safety-critical decisions.

@@ -6,15 +6,24 @@
 #include <INA226.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <ArduinoOTA.h>
 
 // --- Firmware Info ---
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 // --- Hardware Pins (Olimex ESP32-POE-ISO-IND) ---
 #define I2C_SDA 13
 #define I2C_SCL 16
 #define ADC_HV1 32
 #define ADC_HV2 33
+
+// --- HV Feedback Calibration ---
+// Adjust these after measuring with a known reference.
+// output_kV = (adc_volts * HV_CAL_GAIN) + HV_CAL_OFFSET
+#define HV1_CAL_GAIN   1000.0  // default 1V = 1000V
+#define HV1_CAL_OFFSET 0.0
+#define HV2_CAL_GAIN   1000.0
+#define HV2_CAL_OFFSET 0.0
 
 // --- Devices ---
 INA226 INA(0x40);
@@ -80,8 +89,10 @@ void readSensors() {
     poe_voltage = INA.getBusVoltage();
     poe_current = INA.getCurrent();
   }
-  hv1_feedback = analogReadMilliVolts(ADC_HV1) / 1000.0;
-  hv2_feedback = analogReadMilliVolts(ADC_HV2) / 1000.0;
+  float hv1_raw = analogReadMilliVolts(ADC_HV1) / 1000.0;
+  float hv2_raw = analogReadMilliVolts(ADC_HV2) / 1000.0;
+  hv1_feedback = hv1_raw;  // raw volts (0-3.3V) — calibration applied in display
+  hv2_feedback = hv2_raw;
   uptime_seconds = millis() / 1000;
 }
 
@@ -178,8 +189,8 @@ const char index_html[] PROGMEM = R"rawliteral(
       fetch('/status').then(r => r.json()).then(data => {
         document.getElementById('voltage').innerHTML = data.v.toFixed(2) + '<span class="unit">V</span>';
         document.getElementById('current').innerHTML = data.i.toFixed(3) + '<span class="unit">A</span>';
-        document.getElementById('hv1').innerHTML = Math.round(data.hv1 * 1000) + '<span class="unit">V</span>';
-        document.getElementById('hv2').innerHTML = Math.round(data.hv2 * 1000) + '<span class="unit">V</span>';
+        document.getElementById('hv1').innerHTML = Math.round(data.hv1 * data.hv1g + (data.hv1o||0)) + '<span class="unit">V</span>';
+        document.getElementById('hv2').innerHTML = Math.round(data.hv2 * data.hv2g + (data.hv2o||0)) + '<span class="unit">V</span>';
         const st = document.getElementById('p-status');
         if(!data.ok) { st.innerHTML = 'SENSOR ERROR'; st.className = 'badge error'; }
         else { st.innerHTML = 'ONLINE'; st.className = 'badge'; }
@@ -234,7 +245,7 @@ void setup() {
   // --- Web Server Routes ---
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html);
+    request->send(200, "text/html", index_html);
   });
 
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -249,6 +260,10 @@ void setup() {
     doc["c1"] = ch1.current;  // Actual position
     doc["c2"] = ch2.current;
     doc["ok"] = ina_ok;
+    doc["hv1g"] = HV1_CAL_GAIN;
+    doc["hv1o"] = HV1_CAL_OFFSET;
+    doc["hv2g"] = HV2_CAL_GAIN;
+    doc["hv2o"] = HV2_CAL_OFFSET;
     String res;
     serializeJson(doc, res);
     request->send(200, "application/json", res);
@@ -291,10 +306,25 @@ void setup() {
 
   server.begin();
   Serial.println("[HTTP] Server started");
+
+  // --- OTA Updates ---
+  ArduinoOTA.setHostname("hvps-controller");
+  ArduinoOTA.onStart([]() {
+    Serial.println("[OTA] Update starting...");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("[OTA] Update complete. Rebooting.");
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Error[%u]\n", error);
+  });
+  ArduinoOTA.begin();
+  Serial.println("[OTA] Ready");
 }
 
 // --- Main Loop (all I2C and ADC access happens here) ---
 void loop() {
+  ArduinoOTA.handle();
   processSlewRate();
   readSensors();
   delay(1);
