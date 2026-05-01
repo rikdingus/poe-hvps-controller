@@ -28,6 +28,8 @@ services:
     container_name: hbbs
     command: hbbs
     network_mode: host
+    volumes:
+      - ./rustdesk-data:/root
     restart: unless-stopped
 
   hbr:
@@ -35,4 +37,6 @@ services:
     container_name: hbr
     command: hbr
     network_mode: host
+    volumes:
+      - ./rustdesk-data:/root
     restart: unless-stopped
