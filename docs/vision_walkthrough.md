@@ -31,5 +31,17 @@ This isn't just about control; it's about **safe** control.
 ## 📈 Future Capabilities
 Research Station Alpha is built to scale. The current architecture supports up to 255 nodes, integrated Home Assistant automations, and long-term data logging for advanced scientific experiments.
 
+---
+
+## ⚡ Uninterruptible Research: Power Resilience
+A laboratory experiment should never fail due to a power outage. We have integrated the **MikroTik NetPower Lite 8P** and high-capacity **LiFePO4 battery storage** to ensure the station is "Always Hot."
+
+![Power Resilience Vision](file:///C:/Users/theon/.gemini/antigravity/brain/10718a31-6cb2-4aa4-bb6e-f716b6ce5381/research_station_power_vision_1777661156619.png)
+
+### Key Features:
+- **Zero-Downtime UPS**: Automatic switching between 48V primary power and 24V battery backup.
+- **Redundant PoE Delivery**: Dedicated hardware channels for each of the 10 nodes to ensure localized faults don't cascade.
+- **Battery Intelligence**: Real-time State-of-Charge monitoring integrated into the Master Dashboard.
+
 > [!TIP]
 > This project is open for collaboration and review. Check out the full documentation in the `/docs` folder of our repository!
