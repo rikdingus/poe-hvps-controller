@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, ShieldCheck, Zap, Power, AlertTriangle, Settings, RefreshCcw, Gauge } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import { Activity, ShieldCheck, Zap, Power, Settings, Gauge } from 'lucide-react';
+import NodeCard from './components/NodeCard';
 
 const QuotaWidget = ({ credits }) => {
   if (!credits) return null;
@@ -31,71 +31,32 @@ const QuotaWidget = ({ credits }) => {
   );
 };
 
-const NodeCard = ({ node }) => {
-  const isOnline = node.status === 'online';
-  const data = node.data;
-  const isRamping = data && (data.p1 !== data.c1 || data.p2 !== data.c2);
-
-  return (
-    <div className={`relative rounded-2xl border backdrop-blur-xl p-5 transition-all ${isOnline ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-red-500/5 border-red-500/20'}`}>
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h3 className="text-lg font-medium text-white/90">{node.name}</h3>
-          <p className="text-xs text-white/40">{node.location} • {node.ip}</p>
-        </div>
-        <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-          {node.status}
-        </div>
-      </div>
-
-      {isOnline && data ? (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-black/20 rounded-lg p-3 border border-white/5">
-              <p className="text-[10px] text-white/40 uppercase mb-1">HV Output 1</p>
-              <p className="text-xl font-bold text-accent">{Math.round(data.hv1 * data.hv1g + data.hv1o)}V</p>
-            </div>
-            <div className="bg-black/20 rounded-lg p-3 border border-white/5">
-              <p className="text-[10px] text-white/40 uppercase mb-1">HV Output 2</p>
-              <p className="text-xl font-bold text-accent">{Math.round(data.hv2 * data.hv2g + data.hv2o)}V</p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-white/60 pt-2 border-t border-white/5">
-            <div className="flex items-center gap-2">
-              <Zap className="w-3 h-3 text-secondary" />
-              <span>{data.v.toFixed(1)}V @ {data.i.toFixed(2)}A</span>
-            </div>
-            {isRamping && (
-              <div className="flex items-center gap-1 text-secondary animate-pulse">
-                <RefreshCcw className="w-3 h-3" />
-                <span>Ramping...</span>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="h-32 flex flex-col items-center justify-center text-white/20 gap-2">
-          <AlertTriangle className="w-8 h-8 opacity-20" />
-          <span className="text-[10px] uppercase">Connection Lost</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default function App() {
   const [nodes, setNodes] = useState([]);
   const [credits, setCredits] = useState(null);
   
   const fetchData = async () => {
     try {
-      const [nodesRes, creditsRes] = await Promise.all([
-        fetch('/api/nodes'),
-        fetch('/api/credits')
-      ]);
-      setNodes(await nodesRes.json());
-      setCredits(await creditsRes.json());
+      // Mock data for development when backend is offline
+      const mockNodes = Array.from({ length: 10 }, (_, i) => ({
+        nodeId: i + 1,
+        status: i === 0 ? 'online' : (Math.random() > 0.3 ? 'online' : 'offline'),
+        channels: [
+          { ch: 1, target_kv: 0.5, current_kv: 0.5 + (Math.random() * 0.05), limit_kv: 3.0 }
+        ],
+        power: { v: 48.2, a: 0.05 + (Math.random() * 0.1), w: 5.8 + (Math.random() * 2) },
+        ups: { battery_pct: 92, source: 'dc' }
+      }));
+
+      // In production, we fetch from /api/nodes
+      // const nodesRes = await fetch('/api/nodes');
+      // setNodes(await nodesRes.json());
+      
+      setNodes(mockNodes);
+      
+      // Keep credits fetching if applicable
+      // const creditsRes = await fetch('/api/credits');
+      // setCredits(await creditsRes.json());
     } catch (e) {
       console.error('Fetch Error:', e);
     }
@@ -108,17 +69,17 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-white p-8">
+    <div className="min-h-screen bg-[#0f172a] text-white p-8">
       <div className="max-w-[1600px] mx-auto grid grid-cols-12 gap-8">
         
         {/* Sidebar */}
         <aside className="col-span-3">
           <div className="flex items-center gap-4 mb-12">
-            <div className="p-3 rounded-2xl bg-accent/20 border border-accent/20">
-              <Activity className="w-8 h-8 text-accent" />
+            <div className="p-3 rounded-2xl bg-cyan-500/20 border border-cyan-500/20">
+              <Activity className="w-8 h-8 text-cyan-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-light tracking-tight">Research Station <span className="font-bold text-accent">Alpha</span></h1>
+              <h1 className="text-2xl font-light tracking-tight">Research Station <span className="font-bold text-cyan-400">Alpha</span></h1>
               <p className="text-white/40 text-[10px] uppercase tracking-widest">HVPS Management Center</p>
             </div>
           </div>
@@ -149,7 +110,7 @@ export default function App() {
         <main className="col-span-9">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {nodes.map(node => (
-              <NodeCard key={node.id} node={node} />
+              <NodeCard key={node.nodeId} node={node} />
             ))}
           </div>
 
@@ -169,10 +130,10 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-4 border-l border-white/10 pl-6">
-              <Settings className="w-6 h-6 text-white/40 animate-spin-slow" />
+              <Settings className="w-6 h-6 text-white/40" />
               <div>
                 <p className="text-[10px] uppercase text-white/40">SysAdmin Console</p>
-                <button className="text-xs text-accent hover:underline">Open Terminal</button>
+                <button className="text-xs text-cyan-400 hover:underline">Open Terminal</button>
               </div>
             </div>
           </footer>
