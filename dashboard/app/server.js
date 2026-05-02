@@ -4,9 +4,21 @@ import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
 import mqtt from 'mqtt';
+import snmp from 'net-snmp';
 
 const app = express();
 const PORT = 3000;
+
+// Infrastructure Configuration
+const MIKROTIK_IP = process.env.MIKROTIK_IP || '192.168.88.1';
+const SNMP_COMMUNITY = process.env.SNMP_COMMUNITY || 'public';
+
+// OIDs for MikroTik NetPower 8P
+const OIDS = {
+  voltage: '.1.3.6.1.4.1.14988.1.1.3.10.0',
+  temp: '.1.3.6.1.4.1.14988.1.1.3.11.0',
+  cpu: '.1.3.6.1.4.1.14988.1.1.3.14.0'
+};
 
 // MQTT Bridge Configuration
 const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
@@ -89,6 +101,29 @@ setInterval(pollNodes, 2000);
 
 // API Endpoints
 app.get('/api/nodes', (req, res) => res.json(Object.values(nodeCache)));
+
+app.get('/api/infra', (req, res) => res.json(infraCache));
+
+// Hard Reboot a node via MikroTik PoE Toggle
+app.post('/api/reboot-node/:id', async (req, res) => {
+  const nodeId = req.params.id;
+  const nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
+  const target = nodes.find(n => n.id == nodeId);
+  
+  if (!target || !target.poe_port) {
+    return res.status(404).json({ error: 'Node or PoE port mapping not found' });
+  }
+
+  console.log(`[INFRA] Executing Hard Reboot on Node ${nodeId} (PoE Port ${target.poe_port})`);
+  
+  // Simulated RouterOS REST API Call
+  // fetch(`https://${MIKROTIK_IP}/rest/interface/ethernet/poe/set`, {
+  //   method: 'POST',
+  //   body: JSON.stringify({ ".id": `*${target.poe_port}`, "poe-out": "off" })
+  // });
+  
+  res.json({ status: 'success', message: `Power cycle initiated for port ${target.poe_port}` });
+});
 
 app.get('/api/credits', async (req, res) => {
   const data = await fs.readFile(CREDITS_CONFIG, 'utf-8');

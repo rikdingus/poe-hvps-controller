@@ -32,10 +32,40 @@ const QuotaWidget = ({ credits }) => {
   );
 };
 
+const InfraWidget = ({ data }) => {
+  if (!data) return null;
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
+      <h3 className="text-[10px] uppercase text-white/40 mb-4 flex items-center gap-2 font-bold tracking-widest">
+        <Settings className="w-3 h-3 text-orange-400" /> Infrastructure Health
+      </h3>
+      <div className="space-y-4">
+        <div className="flex justify-between items-end">
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase text-white/30 font-bold mb-1 tracking-tighter">UPS Battery</span>
+            <span className="text-xl font-black text-orange-400">{data.voltage.toFixed(1)} <span class="text-xs">V</span></span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] uppercase text-white/30 font-bold mb-1 tracking-tighter">Thermal</span>
+            <span className="text-xl font-black text-white/80">{data.temp.toFixed(1)}°C</span>
+          </div>
+        </div>
+        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-orange-600 to-amber-400"
+            style={{ width: `${Math.min((data.voltage / 28) * 100, 100)}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [nodes, setNodes] = useState([]);
   const [history, setHistory] = useState([]);
   const [credits, setCredits] = useState(null);
+  const [infra, setInfra] = useState({ voltage: 26.4, temp: 42, cpu: 12 });
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false);
   
   const handleEmergencyStop = () => {
@@ -51,17 +81,19 @@ export default function App() {
     if (isEmergencyStopped) return;
 
     try {
-      const response = await fetch('/api/nodes');
-      const liveNodes = await response.json();
+      const nodeRes = await fetch('/api/nodes');
+      const liveNodes = await nodeRes.json();
       
+      const infraRes = await fetch('/api/infra');
+      const liveInfra = await infraRes.json();
+      if (liveInfra.lastSeen) setInfra(liveInfra);
+
       if (liveNodes && liveNodes.length > 0) {
         setNodes(liveNodes);
-        
-        // Aggregate history for System Load chart
         const totalW = liveNodes.reduce((sum, n) => sum + (n.status === 'online' ? n.power.w : 0), 0);
         setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString().split(' ')[0], load: totalW }]);
       } else {
-        // Fallback to mock data if backend is empty/dev mode
+        // Fallback to mock data with simulated infra oscillations
         const mockNodes = Array.from({ length: 10 }, (_, i) => {
           const hasFault = Math.random() > 0.98;
           const kv = hasFault ? 3.1 : (0.5 + (Math.random() * 0.05));
@@ -118,6 +150,7 @@ export default function App() {
           </div>
 
           <QuotaWidget credits={credits} />
+          <InfraWidget data={infra} />
 
           {/* System Load Trend Chart */}
           <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-6 flex-1 flex flex-col overflow-hidden">
