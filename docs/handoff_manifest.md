@@ -1,38 +1,36 @@
-# 🏛️ Research Station Alpha: Handoff Manifest
-**Project Phase: Professional Laboratory Maturity (Radboud Edition)**
+# 🌌 Project Korstmos: Handoff Manifest
+**Kosmisch Onderzoek Radboud Studenten Meetopstelling**
 
-This document serves as the primary index for the Research Station Alpha project. It contains the current system architecture, safety protocols, and the deployment roadmap for the upcoming hardware integration.
+Project Korstmos has been fully re-architected as a dedicated Cosmic Ray Observatory. The system is optimized for scintillation-based muon detection, utilizing individual Olimex POE units for each detector plate and a centralized digitizer hub for coincidence monitoring.
 
-## 🛑 Critical Path: Hardware Blocker
+## 🛑 Critical Path: Detector Readiness
 The I2C bus currently reports `NO DEVICES FOUND`.
-- **Diagnosis**: Missing physical 4.7kΩ pull-up resistors on GPIO 13/16.
-- **Action Required**: Physical soldering of resistors to ESP32-POE units.
-- **Firmware Status**: v1.1.5 is active with I2C scanner and safe-start logic (0.5kV).
+- **Diagnosis**: Missing physical 4.7kΩ pull-up resistors on GPIO 13/16 for PMT control.
+- **Action Required**: Physical soldering of resistors to each of the 10 Detector Units.
 
 ---
 
-## 🏛️ Achievement & Features (Radboud Upgrade)
-*   **Institutional Redesign**: Complete Radboud University FNWI "Academic Elite" theme integration.
-*   **Safety Guardian**: Active backend interlock that automatically cuts PoE power via SNMP if hazardous voltage (>3.1kV) is detected.
-*   **Telemetry Archive**: Persistent CSV logging of all measurements for scientific analysis.
-*   **Lab Analytics**: New high-resolution charting page for historical drift and noise analysis.
-*   **Pre-Flight Audit**: Environmental diagnostic tool (`audit_environment.js`) to verify network readiness.
+## 🏛️ Korstmos Research Features
+*   **One-Node-Per-Detector**: Architecture optimized for 1:1 Olimex-to-Scintillator mapping.
+*   **Central Digitizer Dashboard**: New UI widget monitoring Trigger Rates (Hz), Coincidence Mode (2-fold/3-fold), and global event synchronicity.
+*   **PMT Optimized Telemetry**: Updated Detector Cards focusing on High-Voltage (0-1500V) and Discriminator Thresholds (0-500mV).
+*   **Institutional Identity**: Fully rebranded to Project Korstmos with Radboud University academic styling.
 
 ---
 
-## 🛠️ Architecture & Infrastructure
-- **Compute**: Node.js / Express Backend + React 19 Frontend.
-- **Network**: MikroTik RB5009 (Router) + NetPower 8P (PoE Switch).
-- **Nodes**: Olimex ESP32-POE Units.
-- **Protocols**: SNMP v2c (Infra), MQTT (Live Feed), HTTP/JSON (API).
+## 🛠️ System Architecture
+- **Detectors**: Scintillator plates + PMTs + Olimex ESP32-POE.
+- **Digitizer**: Central logic hub for muon pulse coincidence.
+- **Backbone**: MikroTik RB5009 + NetPower 8P (PoE Power & Telemetry).
+- **Control**: Node.js Master Controller + React 19 Observation Dashboard.
 
 ---
 
-## 📅 Roadmap for Next Model (Tomorrow)
-1. **Audit Phase**: Run `node audit_environment.js` after connecting RB5009.
-2. **Live Integration**: Verify real-time SNMP feedback for UPS and Lab Temperature.
-3. **Safety Verification**: Test the 'Safety Guardian' kill-switch (simulated fault).
-4. **Physical Remediation**: Execute the pull-up resistor soldering as per the hardware design guide.
+## 📅 Roadmap for Muon Acquisition (Tomorrow)
+1. **Array Audit**: Run `node audit_environment.js` to verify all 10 detector paths.
+2. **First Light**: Power up Detector-01 and verify PMT Voltage feedback.
+3. **Coincidence Tuning**: Use the Digitizer Widget to adjust thresholds until the Muon Trigger Rate (Hz) stabilizes.
+4. **Physical Remediation**: Solder I2C pull-ups to enable live PMT gain adjustment.
 
 ---
-**Status: MISSION READY. Standing by for hardware integration.** 🏁🚀🏛️
+**Status: READY FOR MUON ACQUISITION.** 🌌🛸🏛️

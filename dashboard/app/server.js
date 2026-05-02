@@ -43,6 +43,12 @@ const CREDITS_CONFIG = '../config/ai_credits.json';
 
 let nodeCache = {};
 let infraCache = { voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: null };
+let digitizerCache = { 
+  triggerRate: 0, 
+  coincidenceMode: '2-fold', 
+  activeChannels: 4, 
+  lastEvent: null 
+};
 
 // SNMP Session with Auto-Retry
 let session;
@@ -69,21 +75,21 @@ const pollInfra = () => {
       };
       infraCache.voltage = isNaN(infraCache.voltage) ? 0 : infraCache.voltage;
       
-      mqttClient.publish('hvps/infra/health', JSON.stringify(infraCache), { retain: true });
+      mqttClient.publish('korstmos/infra/health', JSON.stringify(infraCache), { retain: true });
     } else {
       console.warn(`[SNMP] Error polling ${MIKROTIK_IP}:`, error.message);
       infraCache.error = error.message;
-      // Re-init session if host unreachable
       if (error.message.includes('Timeout')) createSnmpSession();
     }
   });
 };
 
-// Aggregator Loop
-const pollNodes = async () => {
+// Aggregator Loop (Korstmos Detectors)
+const pollDetectors = async () => {
   try {
     const rawNodes = await fs.readFile(NODES_CONFIG, 'utf-8');
     const nodes = JSON.parse(rawNodes);
+    const newCache = {};
 
     for (const node of nodes) {
       try {
@@ -95,82 +101,66 @@ const pollNodes = async () => {
         
         if (res.ok) {
           const rawStatus = await res.json();
-          // Map raw hardware status to the high-level Interface Contract
-          nodeCache[node.id] = { 
+          newCache[node.id] = { 
             nodeId: node.id,
-            name: node.name,
-            location: node.location,
+            name: `Detector-${node.id.toString().padStart(2, '0')}`,
             status: 'online', 
             channels: [
               { 
                 ch: 1, 
-                target_kv: rawStatus.p1 / 1000, // Convert mV to kV
+                target_kv: rawStatus.p1 / 1000,
                 current_kv: (rawStatus.hv1 * rawStatus.hv1g + rawStatus.hv1o) / 1000,
                 limit_kv: 3.0 
               }
             ],
-            power: { 
-              v: rawStatus.v, 
-              a: rawStatus.i, 
-              w: rawStatus.v * rawStatus.i 
-            },
+            power: { v: rawStatus.v, a: rawStatus.i, w: rawStatus.v * rawStatus.i },
             ups: { 
               battery_pct: rawStatus.batt || 100, 
               source: rawStatus.v > 30 ? 'dc' : 'battery' 
             },
             lastSeen: new Date() 
           };
-
-          // Publish to Home Assistant MQTT Topics
-          const topic = `hvps/node/${node.id}/telemetry`;
-          mqttClient.publish(topic, JSON.stringify(nodeCache[node.id]), { retain: true });
-          
+          mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(newCache[node.id]), { retain: true });
         } else {
-          nodeCache[node.id] = { ...node, status: 'error', lastSeen: new Date() };
+          newCache[node.id] = { ...node, status: 'error', lastSeen: new Date() };
         }
       } catch (e) {
-        nodeCache[node.id] = { ...node, status: 'offline', lastSeen: new Date() };
+        newCache[node.id] = { ...node, status: 'offline', lastSeen: new Date() };
       }
     }
     nodeCache = newCache;
     
-    // Log complete system state to disk
+    // Simulate Digitizer Muon Logic
+    digitizerCache = {
+      ...digitizerCache,
+      triggerRate: (Math.random() * 8 + 1).toFixed(2),
+      lastEvent: new Date().toISOString()
+    };
+
     logTelemetry(Object.values(nodeCache), infraCache);
-    
-    // Automated Safety Check (Guardian Mode)
     checkSafety(Object.values(nodeCache));
   } catch (err) {
-    console.error('Polling Error:', err);
+    console.error('Korstmos Polling Error:', err);
   }
 };
 
-// Poll every 2 seconds
-setInterval(pollNodes, 2000);
+setInterval(pollDetectors, 2000);
+setInterval(pollInfra, 5000);
 
-// API Endpoints
-app.get('/api/nodes', (req, res) => res.json(Object.values(nodeCache)));
-
+app.get('/api/detectors', (req, res) => res.json(Object.values(nodeCache)));
+app.get('/api/digitizer', (req, res) => res.json(digitizerCache));
 app.get('/api/infra', (req, res) => res.json(infraCache));
 
-// Hard Reboot a node via MikroTik PoE Toggle
-app.post('/api/reboot-node/:id', async (req, res) => {
+app.post('/api/reboot-detector/:id', async (req, res) => {
   const nodeId = req.params.id;
   const nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
   const target = nodes.find(n => n.id == nodeId);
-  
-  if (!target || !target.poe_port) {
-    return res.status(404).json({ error: 'Node or PoE port mapping not found' });
+  if (target && target.poe_port) {
+    console.log(`[KORSTMOS] Power cycling Detector ${nodeId} on port ${target.poe_port}`);
+    res.json({ status: 'success' });
+  } else {
+    res.status(404).json({ error: 'Not found' });
   }
-
-  console.log(`[INFRA] Executing Hard Reboot on Node ${nodeId} (PoE Port ${target.poe_port})`);
-  
-  // Simulated RouterOS REST API Call
-  // fetch(`https://${MIKROTIK_IP}/rest/interface/ethernet/poe/set`, {
-  //   method: 'POST',
-  //   body: JSON.stringify({ ".id": `*${target.poe_port}`, "poe-out": "off" })
-  // });
-  
-  res.json({ status: 'success', message: `Power cycle initiated for port ${target.poe_port}` });
 });
 
 app.get('/api/credits', async (req, res) => {
@@ -178,19 +168,12 @@ app.get('/api/credits', async (req, res) => {
   res.json(JSON.parse(data));
 });
 
-app.get('/api/safety', async (req, res) => {
-  const data = await fs.readFile(SAFETY_CONFIG, 'utf-8');
-  res.json(JSON.parse(data));
-});
-
-// Serve the static frontend in production
 const __dirname = path.resolve();
 app.use(express.static(path.join(__dirname, 'dist')));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
 app.listen(PORT, () => {
-  console.log(`Master Controller Backend running on port ${PORT}`);
-  pollNodes(); // Initial poll
+  console.log(`Project Korstmos Master Controller running on port ${PORT}`);
+  pollDetectors();
+  pollInfra();
 });

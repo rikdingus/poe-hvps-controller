@@ -25,26 +25,26 @@ async function checkSnmp() {
 }
 
 async function audit() {
-  console.log('--- RESEARCH STATION ALPHA: PRE-FLIGHT AUDIT ---');
+  console.log('--- PROJECT KORSTMOS: PRE-FLIGHT AUDIT ---');
   
   const pingOk = await checkPing();
   console.log(`[NETWORK] Ping ${MIKROTIK_IP}: ${pingOk ? '✅ OK' : '❌ FAILED'}`);
 
   const snmpOk = await checkSnmp();
-  console.log(`[SNMP] Permission Check: ${snmpOk ? '✅ OK' : '❌ FAILED (Check Community String)'}`);
+  console.log(`[SNMP] Permission Check: ${snmpOk ? '✅ OK' : '❌ FAILED'}`);
 
   try {
     await fs.access('./logs');
     console.log('[FILESYSTEM] Telemetry Logs: ✅ WRITABLE');
   } catch {
-    console.log('[FILESYSTEM] Telemetry Logs: ❌ FAILED (Directory missing)');
+    console.log('[FILESYSTEM] Telemetry Logs: ❌ FAILED');
   }
 
   console.log('------------------------------------------------');
   if (pingOk && snmpOk) {
-    console.log('🚀 STATUS: GO FOR HARDWARE INTEGRATION');
+    console.log('🚀 STATUS: GO FOR DETECTOR INTEGRATION');
   } else {
-    console.log('⚠️ STATUS: NO-GO (Fix Network/SNMP issues)');
+    console.log('⚠️ STATUS: NO-GO (Check Network/SNMP)');
   }
 }
 
