@@ -1,140 +1,79 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Activity, Zap, ShieldAlert, Cpu } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import React from 'react';
+import { ShieldAlert, Zap, Info } from 'lucide-react';
 
 const NodeCard = ({ node }) => {
-  const { nodeId, status, channels, power, ups, alert } = node;
-  const [history, setHistory] = useState([]);
-  
-  const mainKv = channels[0].current_kv;
-  const isCritical = alert || mainKv > 2.8;
-
-  useEffect(() => {
-    if (status === 'online') {
-      setHistory(prev => [...prev.slice(-19), { val: mainKv }]);
-    }
-  }, [mainKv, status]);
-
-  // Calculate percentage for the gauge (0.5kV - 3.0kV)
   const calculatePct = (kv) => {
     const min = 0.5;
     const max = 3.0;
-    const pct = ((kv - min) / (max - min)) * 100;
-    return Math.min(Math.max(pct, 0), 100);
+    return Math.max(0, Math.min(100, ((kv - min) / (max - min)) * 100));
   };
 
-  const gaugePct = calculatePct(mainKv);
+  const pct = calculatePct(node.channels[0].current_kv);
+  const isCritical = node.alert || node.channels[0].current_kv > 2.8;
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ 
-        opacity: 1, 
-        y: 0,
-        borderColor: isCritical ? 'rgba(239, 68, 68, 0.5)' : 'rgba(255, 255, 255, 0.1)',
-        boxShadow: isCritical ? '0 0 20px rgba(239, 68, 68, 0.2)' : 'none'
-      }}
-      whileHover={{ y: -5, transition: { duration: 0.2 } }}
-      className={`relative overflow-hidden glass rounded-[32px] p-7 border group transition-all duration-500`}
-    >
-      {/* Background Pulse */}
-      {status === 'online' && (
-        <div className={`absolute top-0 right-0 w-40 h-40 blur-[80px] rounded-full -mr-20 -mt-20 animate-pulse ${isCritical ? 'bg-red-500/20' : 'bg-cyan-500/10'}`} />
-      )}
-
-      {/* Header */}
-      <div class="flex justify-between items-start mb-8">
+    <div className={`bg-white border border-[#e5e5e5] transition-all duration-300 flex flex-col group ${isCritical ? 'border-[#be2c2e] border-2 ring-4 ring-[#be2c2e]/5' : 'hover:border-[#be2c2e]'}`}>
+      {/* Node Header */}
+      <div className="bg-white px-8 py-6 border-b border-[#e5e5e5] flex justify-between items-center">
         <div>
-          <h3 class="text-[10px] uppercase tracking-[0.3em] text-white/30 font-black mb-1">Station Node</h3>
-          <div class="flex items-center gap-3">
-            <span class="text-3xl font-black tracking-tighter italic">0{nodeId}</span>
-            <span class={`w-2 h-2 rounded-full ${isCritical ? 'bg-red-500 animate-ping' : (status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-white/10')}`}></span>
-          </div>
+          <span className="text-[9px] uppercase font-black text-gray-400 tracking-[0.2em] block mb-1">Laboratory Unit</span>
+          <h3 className="text-2xl font-black text-[#1d1d1b]">
+            UNIT-{node.nodeId.toString().padStart(2, '0')}
+          </h3>
         </div>
-        <div className={`p-3 rounded-2xl border transition-all ${isCritical ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/20'}`}>
-          {isCritical ? <ShieldAlert size={18} /> : <Cpu size={18} />}
+        <div className="flex flex-col items-end">
+           <span className={`text-[10px] font-black uppercase tracking-tighter mb-1 ${node.status === 'online' ? 'text-emerald-600' : 'text-gray-300'}`}>
+             {node.status}
+           </span>
+           <div className={`w-3 h-3 ${node.status === 'online' ? (isCritical ? 'bg-[#be2c2e] animate-pulse' : 'bg-emerald-500') : 'bg-gray-200'}`}></div>
         </div>
       </div>
 
-      {/* Main Gauge & Sparkline */}
-      <div class="relative flex flex-col items-center justify-center mb-10 py-2">
-        <svg viewBox="0 0 100 60" class="w-full max-w-[220px] drop-shadow-[0_0_15px_rgba(34,211,238,0.1)]">
-          <path
-            d="M 10 50 A 40 40 0 0 1 90 50"
-            fill="none"
-            stroke="rgba(255,255,255,0.03)"
-            strokeWidth="10"
-            strokeLinecap="round"
-          />
-          <motion.path
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: gaugePct / 100 }}
-            d="M 10 50 A 40 40 0 0 1 90 50"
-            fill="none"
-            stroke={isCritical ? '#f87171' : '#22d3ee'}
-            strokeWidth="10"
-            strokeLinecap="round"
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          />
-        </svg>
+      {/* Main Readout */}
+      <div className="p-10 flex flex-col items-center justify-center bg-[#fafafa]">
+        <div className="relative mb-6">
+           <div className={`text-8xl font-black tracking-tighter leading-none ${isCritical ? 'text-[#be2c2e]' : 'text-[#1d1d1b]'}`}>
+             {node.channels[0].current_kv.toFixed(2)}
+           </div>
+           <span className="absolute -right-12 bottom-1 text-2xl font-bold text-[#be2c2e]">kV</span>
+        </div>
         
-        <div class="absolute inset-0 flex flex-col items-center justify-center pt-6">
-          <span className={`text-5xl font-black tracking-tighter leading-none transition-colors ${isCritical ? 'text-red-400' : 'text-white'}`}>{mainKv.toFixed(2)}</span>
-          <span class="text-[10px] uppercase tracking-[0.2em] text-white/30 font-black mt-2">kV Output</span>
+        {/* Progress Bar (Radboud Style) */}
+        <div className="w-full h-3 bg-gray-200 mb-2">
+           <div 
+             className={`h-full transition-all duration-500 ${isCritical ? 'bg-[#be2c2e]' : 'bg-[#1d1d1b]'}`}
+             style={{ width: `${pct}%` }}
+           />
         </div>
-
-        {/* Mini Sparkline Overlaid on Gauge */}
-        <div className="absolute bottom-2 w-full h-8 px-12 opacity-30">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={history}>
-              <Line type="monotone" dataKey="val" stroke={isCritical ? '#ef4444' : '#22d3ee'} strokeWidth={2} dot={false} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="flex justify-between w-full text-[9px] uppercase font-black text-gray-400 tracking-widest">
+          <span>0.50 kV</span>
+          <span>3.00 kV</span>
         </div>
       </div>
 
-      {/* Secondary Stats */}
-      <div class="grid grid-cols-2 gap-4">
-        <div class="glass bg-white/[0.02] p-3 rounded-2xl border border-white/5">
-          <div class="flex items-center gap-2 mb-1">
-            <Zap size={10} className="text-amber-400" />
-            <span class="text-[9px] uppercase tracking-widest text-white/30 font-bold">Current</span>
-          </div>
-          <div class="flex items-baseline gap-1">
-            <span class="text-sm font-bold">{(power.a * 1000).toFixed(1)}</span>
-            <span class="text-[10px] text-white/20">mA</span>
-          </div>
+      {/* Detailed Metrics */}
+      <div className="p-8 grid grid-cols-2 gap-8 border-t border-[#e5e5e5]">
+        <div>
+          <p className="text-[9px] uppercase font-black text-gray-400 mb-2 tracking-widest">Power Load</p>
+          <p className="text-xl font-black">{node.power.w.toFixed(1)} <span className="text-xs text-gray-300">W</span></p>
         </div>
-        <div class="glass bg-white/[0.02] p-3 rounded-2xl border border-white/5">
-          <div class="flex items-center gap-2 mb-1">
-            <Activity size={10} className="text-cyan-400" />
-            <span class="text-[9px] uppercase tracking-widest text-white/30 font-bold">Power</span>
-          </div>
-          <div class="flex items-baseline gap-1">
-            <span class="text-sm font-bold">{power.w.toFixed(1)}</span>
-            <span class="text-[10px] text-white/20">W</span>
-          </div>
+        <div className="text-right">
+          <p className="text-[9px] uppercase font-black text-gray-400 mb-2 tracking-widest">PoE Source</p>
+          <p className="text-xl font-black">{node.power.v.toFixed(1)} <span className="text-xs text-gray-300">V</span></p>
         </div>
       </div>
 
-      {/* UPS / Battery Indicator */}
-      <div class="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-4 rounded-sm border border-white/20 relative flex items-center p-0.5">
-             <div 
-               class="h-full bg-emerald-500 rounded-[1px]" 
-               style={{ width: `${ups.battery_pct}%` }}
-             ></div>
-             <div class="absolute -right-1 w-1 h-2 bg-white/20 rounded-r-sm"></div>
-          </div>
-          <span class="text-[10px] text-white/40 font-bold">{ups.battery_pct}%</span>
-        </div>
-        <span class="text-[9px] uppercase tracking-widest text-white/20 font-bold">
-          Source: {ups.source.toUpperCase()}
-        </span>
+      {/* Fault Indicator / RU Footer */}
+      <div className={`px-8 py-4 flex items-center justify-between transition-colors ${isCritical ? 'bg-[#be2c2e] text-white' : 'bg-white group-hover:bg-[#f8f9fa]'}`}>
+         <div className="flex items-center gap-2">
+           {isCritical && <ShieldAlert className="w-4 h-4" />}
+           <span className={`text-[10px] font-black uppercase tracking-widest ${isCritical ? 'text-white' : 'text-[#be2c2e]'}`}>
+             {isCritical ? 'SAFETY INTERLOCK ACTIVE' : 'DIAGNOSTICS NOMINAL'}
+           </span>
+         </div>
+         <span className={`font-bold transition-transform group-hover:translate-x-1 ${isCritical ? 'text-white' : 'text-[#be2c2e]'}`}>→</span>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

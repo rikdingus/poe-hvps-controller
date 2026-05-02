@@ -3,18 +3,20 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  --ru-red: #be2c2e;
+  --ru-maroon: #7a0000;
+  --ru-slate: #1d1d1b;
+  --ru-gray-bg: #f8f9fa;
+  --ru-border: #e5e5e5;
 }
 
 body {
   margin: 0;
-  background-color: #0f172a;
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(202, 100%, 70%, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, hsla(38, 100%, 50%, 0.1) 0px, transparent 50%);
-  background-attachment: fixed;
+  background-color: var(--ru-gray-bg);
+  color: var(--ru-slate);
+  font-family: 'Inter', -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Custom Scrollbar */
@@ -23,23 +25,32 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--ru-gray-bg);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background: #ccc;
+  border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
+@layer components {
+  .ru-card {
+    background: white;
+    border: 1px solid var(--ru-border);
+    border-radius: 0; /* Radboud style is often more rectangular */
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .ru-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+  }
 
-@layer utilities {
-  .glass {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+  .ru-heading {
+    color: var(--ru-red);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.02em;
   }
 }
