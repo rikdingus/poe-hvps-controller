@@ -5,15 +5,20 @@ import path from 'path';
 import fetch from 'node-fetch';
 import mqtt from 'mqtt';
 import snmp from 'net-snmp';
+import { initLogger, logTelemetry } from './telemetry_logger.js';
+import { checkSafety } from './safety_guardian.js';
 
 const app = express();
 const PORT = 3000;
+
+// Initialize Logger
+initLogger();
 
 // Infrastructure Configuration
 const MIKROTIK_IP = process.env.MIKROTIK_IP || '192.168.88.1';
 const SNMP_COMMUNITY = process.env.SNMP_COMMUNITY || 'public';
 
-// OIDs for MikroTik NetPower 8P
+// OIDs for MikroTik NetPower 8P / RB5009
 const OIDS = {
   voltage: '.1.3.6.1.4.1.14988.1.1.3.10.0',
   temp: '.1.3.6.1.4.1.14988.1.1.3.11.0',
@@ -37,6 +42,42 @@ const SAFETY_CONFIG = '../config/safety_limits.json';
 const CREDITS_CONFIG = '../config/ai_credits.json';
 
 let nodeCache = {};
+let infraCache = { voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: null };
+
+// SNMP Session with Auto-Retry
+let session;
+const createSnmpSession = () => {
+  if (session) session.close();
+  session = snmp.createSession(MIKROTIK_IP, SNMP_COMMUNITY, {
+    retries: 3,
+    timeout: 2000,
+    backoff: 1.5
+  });
+};
+
+createSnmpSession();
+
+const pollInfra = () => {
+  session.get(Object.values(OIDS), (error, varbinds) => {
+    if (!error) {
+      infraCache = {
+        voltage: varbinds[0].value / 10,
+        temp: varbinds[1].value / 10,
+        cpu: varbinds[2].value,
+        lastSeen: new Date(),
+        error: null
+      };
+      infraCache.voltage = isNaN(infraCache.voltage) ? 0 : infraCache.voltage;
+      
+      mqttClient.publish('hvps/infra/health', JSON.stringify(infraCache), { retain: true });
+    } else {
+      console.warn(`[SNMP] Error polling ${MIKROTIK_IP}:`, error.message);
+      infraCache.error = error.message;
+      // Re-init session if host unreachable
+      if (error.message.includes('Timeout')) createSnmpSession();
+    }
+  });
+};
 
 // Aggregator Loop
 const pollNodes = async () => {
@@ -91,6 +132,13 @@ const pollNodes = async () => {
         nodeCache[node.id] = { ...node, status: 'offline', lastSeen: new Date() };
       }
     }
+    nodeCache = newCache;
+    
+    // Log complete system state to disk
+    logTelemetry(Object.values(nodeCache), infraCache);
+    
+    // Automated Safety Check (Guardian Mode)
+    checkSafety(Object.values(nodeCache));
   } catch (err) {
     console.error('Polling Error:', err);
   }

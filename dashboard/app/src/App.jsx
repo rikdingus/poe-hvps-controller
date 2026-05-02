@@ -1,27 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Activity, ShieldCheck, Zap, Power, Settings, Gauge, TrendingUp } from 'lucide-react';
-import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { Activity, ShieldCheck, Zap, Settings, Gauge, TrendingUp, LayoutDashboard } from 'lucide-react';
+import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 import NodeCard from './components/NodeCard';
+import Analytics from './components/Analytics';
 
 const QuotaWidget = ({ credits }) => {
   if (!credits) return null;
   return (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
-      <h3 className="text-[10px] uppercase text-white/40 mb-3 flex items-center gap-2 font-bold tracking-widest">
-        <Gauge className="w-3 h-3 text-violet-400" /> AI Fuel Status
+    <div className="bg-white border border-[#e5e5e5] p-6 mb-8">
+      <h3 className="text-[10px] uppercase text-[#be2c2e] mb-4 flex items-center gap-2 font-black tracking-widest">
+        <Gauge className="w-3 h-3" /> AI Credit Status
       </h3>
       <div className="space-y-4">
         {Object.entries(credits.models).map(([key, model]) => (
           <div key={key}>
             <div className="flex justify-between text-[10px] mb-1">
-              <span className="text-white/60 uppercase">{model.display_name}</span>
-              <span className={model.status === 'DEPLETED' ? 'text-red-400' : 'text-emerald-400 font-bold'}>
+              <span className="text-gray-400 font-black uppercase tracking-tighter">{model.display_name}</span>
+              <span className={model.status === 'DEPLETED' ? 'text-[#be2c2e]' : 'text-emerald-600 font-black'}>
                 {model.status}
               </span>
             </div>
-            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+            <div className="h-1 w-full bg-gray-100 overflow-hidden">
               <div 
-                className={`h-full transition-all duration-1000 ${model.status === 'DEPLETED' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-emerald-500 to-cyan-400'}`}
+                className={`h-full transition-all duration-1000 ${model.status === 'DEPLETED' ? 'bg-[#be2c2e]' : 'bg-[#1d1d1b]'}`}
                 style={{ width: `${(model.credits_remaining / model.total_budget) * 100}%` }}
               />
             </div>
@@ -35,24 +36,24 @@ const QuotaWidget = ({ credits }) => {
 const InfraWidget = ({ data }) => {
   if (!data) return null;
   return (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
-      <h3 className="text-[10px] uppercase text-white/40 mb-4 flex items-center gap-2 font-bold tracking-widest">
-        <Settings className="w-3 h-3 text-orange-400" /> Infrastructure Health
+    <div className="bg-white border border-[#e5e5e5] p-8 mb-8">
+      <h3 className="text-[10px] uppercase text-[#be2c2e] mb-6 flex items-center gap-2 font-black tracking-widest">
+        <Settings className="w-3 h-3" /> Infrastructure Health
       </h3>
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase text-white/30 font-bold mb-1 tracking-tighter">UPS Battery</span>
-            <span className="text-xl font-black text-orange-400">{data.voltage.toFixed(1)} <span class="text-xs">V</span></span>
+            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">UPS Battery</span>
+            <span className="text-3xl font-black text-[#be2c2e]">{data.voltage.toFixed(1)} <span className="text-sm">V</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[10px] uppercase text-white/30 font-bold mb-1 tracking-tighter">Thermal</span>
-            <span className="text-xl font-black text-white/80">{data.temp.toFixed(1)}°C</span>
+            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Lab Temp</span>
+            <span className="text-3xl font-black text-[#1d1d1b]">{data.temp.toFixed(1)}°C</span>
           </div>
         </div>
-        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+        <div className="h-2 w-full bg-gray-100 overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-orange-600 to-amber-400"
+            className="h-full bg-[#be2c2e]"
             style={{ width: `${Math.min((data.voltage / 28) * 100, 100)}%` }}
           />
         </div>
@@ -67,6 +68,7 @@ export default function App() {
   const [credits, setCredits] = useState(null);
   const [infra, setInfra] = useState({ voltage: 26.4, temp: 42, cpu: 12 });
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false);
+  const [view, setView] = useState('dashboard');
   
   const handleEmergencyStop = () => {
     setIsEmergencyStopped(true);
@@ -91,9 +93,8 @@ export default function App() {
       if (liveNodes && liveNodes.length > 0) {
         setNodes(liveNodes);
         const totalW = liveNodes.reduce((sum, n) => sum + (n.status === 'online' ? n.power.w : 0), 0);
-        setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString().split(' ')[0], load: totalW }]);
+        setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString(), load: totalW }]);
       } else {
-        // Fallback to mock data with simulated infra oscillations
         const mockNodes = Array.from({ length: 10 }, (_, i) => {
           const hasFault = Math.random() > 0.98;
           const kv = hasFault ? 3.1 : (0.5 + (Math.random() * 0.05));
@@ -108,7 +109,7 @@ export default function App() {
         });
         setNodes(mockNodes);
         const totalW = mockNodes.reduce((sum, n) => sum + (n.status === 'online' ? n.power.w : 0), 0);
-        setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString().split(' ')[0], load: totalW }]);
+        setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString(), load: totalW }]);
       }
     } catch (e) {
       console.error('Fetch Error:', e);
@@ -170,6 +171,21 @@ export default function App() {
         
         {/* Sidebar */}
         <aside className="col-span-3">
+          <nav className="mb-10 space-y-2">
+             <button 
+               onClick={() => setView('dashboard')}
+               className={`w-full px-8 py-5 text-left font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center gap-4 ${view === 'dashboard' ? 'bg-[#be2c2e] text-white' : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e]'}`}
+             >
+               <LayoutDashboard className="w-4 h-4" /> Real-Time Feed
+             </button>
+             <button 
+               onClick={() => setView('analytics')}
+               className={`w-full px-8 py-5 text-left font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center gap-4 ${view === 'analytics' ? 'bg-[#be2c2e] text-white' : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e]'}`}
+             >
+               <TrendingUp className="w-4 h-4" /> Lab Archive
+             </button>
+          </nav>
+
           <InfraWidget data={infra} />
           
           <div className="bg-white border border-[#e5e5e5] p-8 mb-8">
@@ -191,11 +207,15 @@ export default function App() {
 
         {/* Main Content */}
         <main className="col-span-9">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-            {nodes.map(node => (
-              <NodeCard key={node.nodeId} node={node} />
-            ))}
-          </div>
+          {view === 'dashboard' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+              {nodes.map(node => (
+                <NodeCard key={node.nodeId} node={node} />
+              ))}
+            </div>
+          ) : (
+            <Analytics />
+          )}
         </main>
       </div>
     </div>

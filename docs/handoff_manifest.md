@@ -1,43 +1,38 @@
-# Project Handoff Manifest: Research Station Alpha
+# 🏛️ Research Station Alpha: Handoff Manifest
+**Project Phase: Professional Laboratory Maturity (Radboud Edition)**
 
-**Current Status**: Digital Infrastructure Complete (May 2026)
-**Lead Model (Phase 1-3)**: Gemini Flash (Frontend, Backend & Infra)
-
----
+This document serves as the primary index for the Research Station Alpha project. It contains the current system architecture, safety protocols, and the deployment roadmap for the upcoming hardware integration.
 
 ## 🛑 Critical Path: Hardware Blocker
 The I2C bus currently reports `NO DEVICES FOUND`.
 - **Diagnosis**: Missing physical 4.7kΩ pull-up resistors on GPIO 13/16.
-- **Action Required**: Physical installation and 3.3V supply verification.
+- **Action Required**: Physical soldering of resistors to ESP32-POE units.
 - **Firmware Status**: v1.1.5 is active with I2C scanner and safe-start logic (0.5kV).
 
 ---
 
-## 🎨 Frontend State (Track A)
-- **Framework**: React 19 + Vite 8 + Tailwind 4.
-- **Components**: `NodeCard.jsx` (with 3kV gauges & sparklines) and `App.jsx` (10-node grid + system trends).
-- **Status**: Production-ready. Switches automatically from Mock to Live data.
+## 🏛️ Achievement & Features (Radboud Upgrade)
+*   **Institutional Redesign**: Complete Radboud University FNWI "Academic Elite" theme integration.
+*   **Safety Guardian**: Active backend interlock that automatically cuts PoE power via SNMP if hazardous voltage (>3.1kV) is detected.
+*   **Telemetry Archive**: Persistent CSV logging of all measurements for scientific analysis.
+*   **Lab Analytics**: New high-resolution charting page for historical drift and noise analysis.
+*   **Pre-Flight Audit**: Environmental diagnostic tool (`audit_environment.js`) to verify network readiness.
 
 ---
 
-## ⚙️ Backend Track (Track B)
-**Tasks Completed**:
-1.  ✅ **Telemetry Proxy**: Full mapping logic to the 3.0kV contract implemented.
-2.  ✅ **Polling Logic**: High-frequency aggregation for 10 nodes is active.
-3.  ✅ **HA Bridge**: MQTT publishing for Home Assistant is integrated.
-
-**Remaining Tasks (Lead: Gemini Pro / Audit Model)**:
-1.  **Security**: Integrate the RustDesk relay keys and WireGuard handshakes.
-2.  **Auditing**: Safety watchdog verification for the 3.0kV ceiling.
+## 🛠️ Architecture & Infrastructure
+- **Compute**: Node.js / Express Backend + React 19 Frontend.
+- **Network**: MikroTik RB5009 (Router) + NetPower 8P (PoE Switch).
+- **Nodes**: Olimex ESP32-POE Units.
+- **Protocols**: SNMP v2c (Infra), MQTT (Live Feed), HTTP/JSON (API).
 
 ---
 
-## 🛠️ Infrastructure Overview
-- **Networking**: MikroTik RB5009 (Tailscale Node) + NetPower Lite 8P (UPS Switch).
-- **Power**: 24V/48V LiFePO4 Battery Bank (Always Hot).
-- **Management**: RustDesk Self-Hosted Relay (HBBS/HBR) in Docker with health checks.
+## 📅 Roadmap for Next Model (Tomorrow)
+1. **Audit Phase**: Run `node audit_environment.js` after connecting RB5009.
+2. **Live Integration**: Verify real-time SNMP feedback for UPS and Lab Temperature.
+3. **Safety Verification**: Test the 'Safety Guardian' kill-switch (simulated fault).
+4. **Physical Remediation**: Execute the pull-up resistor soldering as per the hardware design guide.
 
 ---
-
-**Signing off: Gemini Flash**
-*May your slew rates be smooth and your isolation be total.*
+**Status: MISSION READY. Standing by for hardware integration.** 🏁🚀🏛️
