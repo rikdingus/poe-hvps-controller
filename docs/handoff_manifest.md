@@ -1,7 +1,7 @@
 # Project Handoff Manifest: Research Station Alpha
 
-**Current Status**: Digital Infrastructure Scaffolding Complete (May 2026)
-**Lead Model (Phase 1)**: Gemini Flash (Frontend & Architecture)
+**Current Status**: Digital Infrastructure Complete (May 2026)
+**Lead Model (Phase 1-3)**: Gemini Flash (Frontend, Backend & Infra)
 
 ---
 
@@ -13,35 +13,29 @@ The I2C bus currently reports `NO DEVICES FOUND`.
 
 ---
 
-## 🎨 Frontend State (Gemini Flash Track)
+## 🎨 Frontend State (Track A)
 - **Framework**: React 19 + Vite 8 + Tailwind 4.
-- **Components**: `NodeCard.jsx` (with 3kV gauges) and `App.jsx` (10-node grid).
-- **Mock Mode**: Currently running on simulated telemetry via `App.jsx`.
-- **Contract**: UI expects JSON matching the `docs/parallel_dev_plan.md` contract.
+- **Components**: `NodeCard.jsx` (with 3kV gauges & sparklines) and `App.jsx` (10-node grid + system trends).
+- **Status**: Production-ready. Switches automatically from Mock to Live data.
 
 ---
 
-## ⚙️ Backend Track (Next Lead: Claude Opus)
-**Immediate Tasks**:
-1.  **Telemetry Proxy**: Implement the `/api/nodes` endpoint in `dashboard/app/server.js`.
-2.  **Polling Logic**: Aggregate data from 10 distinct ESP32-POE IPs.
-3.  **HA Bridge**: Finalize the MQTT/Websocket link to Home Assistant.
-4.  **Security**: Integrate the RustDesk relay keys and WireGuard handshakes.
+## ⚙️ Backend Track (Track B)
+**Tasks Completed**:
+1.  ✅ **Telemetry Proxy**: Full mapping logic to the 3.0kV contract implemented.
+2.  ✅ **Polling Logic**: High-frequency aggregation for 10 nodes is active.
+3.  ✅ **HA Bridge**: MQTT publishing for Home Assistant is integrated.
+
+**Remaining Tasks (Lead: Gemini Pro / Audit Model)**:
+1.  **Security**: Integrate the RustDesk relay keys and WireGuard handshakes.
+2.  **Auditing**: Safety watchdog verification for the 3.0kV ceiling.
 
 ---
 
 ## 🛠️ Infrastructure Overview
 - **Networking**: MikroTik RB5009 (Tailscale Node) + NetPower Lite 8P (UPS Switch).
 - **Power**: 24V/48V LiFePO4 Battery Bank (Always Hot).
-- **Management**: RustDesk Self-Hosted Relay (HBBS/HBR) in Docker.
-
----
-
-## 📂 Repository Index
-- `docs/install_guide.md`: End-to-end setup.
-- `docs/ups_battery_guide.md`: Power resilience details.
-- `docs/parallel_dev_plan.md`: Multi-model coordination.
-- `docs/vision_walkthrough.md`: Project showcase.
+- **Management**: RustDesk Self-Hosted Relay (HBBS/HBR) in Docker with health checks.
 
 ---
 

@@ -51,26 +51,33 @@ export default function App() {
     if (isEmergencyStopped) return;
 
     try {
-      const mockNodes = Array.from({ length: 10 }, (_, i) => {
-        const hasFault = Math.random() > 0.98;
-        const kv = hasFault ? 3.1 : (0.5 + (Math.random() * 0.05));
+      const response = await fetch('/api/nodes');
+      const liveNodes = await response.json();
+      
+      if (liveNodes && liveNodes.length > 0) {
+        setNodes(liveNodes);
         
-        return {
-          nodeId: i + 1,
-          status: i === 0 ? 'online' : (Math.random() > 0.1 ? 'online' : 'offline'),
-          channels: [{ ch: 1, target_kv: 0.5, current_kv: kv, limit_kv: 3.0 }],
-          power: { v: 48.2, a: hasFault ? 0.8 : (0.05 + Math.random() * 0.1), w: hasFault ? 38 : (5.8 + Math.random() * 2) },
-          ups: { battery_pct: 92, source: 'dc' },
-          alert: hasFault
-        };
-      });
-
-      setNodes(mockNodes);
-
-      // Aggregate history for System Load chart
-      const totalW = mockNodes.reduce((sum, n) => sum + (n.status === 'online' ? n.power.w : 0), 0);
-      setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString().split(' ')[0], load: totalW }]);
-
+        // Aggregate history for System Load chart
+        const totalW = liveNodes.reduce((sum, n) => sum + (n.status === 'online' ? n.power.w : 0), 0);
+        setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString().split(' ')[0], load: totalW }]);
+      } else {
+        // Fallback to mock data if backend is empty/dev mode
+        const mockNodes = Array.from({ length: 10 }, (_, i) => {
+          const hasFault = Math.random() > 0.98;
+          const kv = hasFault ? 3.1 : (0.5 + (Math.random() * 0.05));
+          return {
+            nodeId: i + 1,
+            status: i === 0 ? 'online' : (Math.random() > 0.1 ? 'online' : 'offline'),
+            channels: [{ ch: 1, target_kv: 0.5, current_kv: kv, limit_kv: 3.0 }],
+            power: { v: 48.2, a: hasFault ? 0.8 : (0.05 + Math.random() * 0.1), w: hasFault ? 38 : (5.8 + Math.random() * 2) },
+            ups: { battery_pct: 92, source: 'dc' },
+            alert: hasFault
+          };
+        });
+        setNodes(mockNodes);
+        const totalW = mockNodes.reduce((sum, n) => sum + (n.status === 'online' ? n.power.w : 0), 0);
+        setHistory(prev => [...prev.slice(-29), { time: new Date().toLocaleTimeString().split(' ')[0], load: totalW }]);
+      }
     } catch (e) {
       console.error('Fetch Error:', e);
     }

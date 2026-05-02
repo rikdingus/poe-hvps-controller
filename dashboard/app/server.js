@@ -3,9 +3,18 @@ import cors from 'cors';
 import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
+import mqtt from 'mqtt';
 
 const app = express();
 const PORT = 3000;
+
+// MQTT Bridge Configuration
+const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
+const mqttClient = mqtt.connect(MQTT_BROKER);
+
+mqttClient.on('connect', () => {
+  console.log(`Connected to Home Assistant MQTT Broker at ${MQTT_BROKER}`);
+});
 
 app.use(cors());
 app.use(express.json());
@@ -58,6 +67,11 @@ const pollNodes = async () => {
             },
             lastSeen: new Date() 
           };
+
+          // Publish to Home Assistant MQTT Topics
+          const topic = `hvps/node/${node.id}/telemetry`;
+          mqttClient.publish(topic, JSON.stringify(nodeCache[node.id]), { retain: true });
+          
         } else {
           nodeCache[node.id] = { ...node, status: 'error', lastSeen: new Date() };
         }
