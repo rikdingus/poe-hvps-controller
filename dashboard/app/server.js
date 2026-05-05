@@ -6,7 +6,14 @@ import fetch from 'node-fetch';
 import mqtt from 'mqtt';
 import snmp from 'net-snmp';
 import { initLogger, logTelemetry } from './telemetry_logger.js';
-import { checkSafety } from './safety_guardian.js';
+import {
+    checkSafety,
+    loadSafetyConfig,
+    isGlobalEmergencyStop,
+    setGlobalEmergencyStop,
+    getLimitsForNode,
+    emergencyShutdown,
+} from './safety_guardian.js';
 
 const app = express();
 const PORT = 3000;
@@ -137,8 +144,9 @@ const pollDetectors = async () => {
       lastEvent: new Date().toISOString()
     };
 
-    logTelemetry(Object.values(nodeCache), infraCache);
-    checkSafety(Object.values(nodeCache));
+    logTelemetry(Object.values(nodeCache), infraCache).catch(e => console.error('[LOGGER]', e.message));
+    // Fire-and-forget but ALWAYS catch -- a guardian crash must not kill the polling loop.
+    checkSafety(Object.values(nodeCache)).catch(e => console.error('[GUARDIAN] checkSafety failed:', e.message));
   } catch (err) {
     console.error('Korstmos Polling Error:', err);
   }
@@ -166,6 +174,38 @@ app.post('/api/reboot-detector/:id', async (req, res) => {
 app.get('/api/credits', async (req, res) => {
   const data = await fs.readFile(CREDITS_CONFIG, 'utf-8');
   res.json(JSON.parse(data));
+});
+
+// ---- Safety endpoints ---------------------------------------------------
+// GET /api/safety-status -> current global flag + per-node effective limits
+app.get('/api/safety-status', async (req, res) => {
+  try {
+    await loadSafetyConfig();
+    const nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
+    const limits = nodes.map(n => ({ name: n.name, ...getLimitsForNode(n.name) }));
+    res.json({ global_emergency_stop: isGlobalEmergencyStop(), limits });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/emergency-stop {active: true|false, reason?: string}
+// Persists global_emergency_stop in safety_limits.json. If activating, also
+// triggers immediate shutdown of every currently-online detector.
+app.post('/api/emergency-stop', async (req, res) => {
+  try {
+    const active = !!(req.body && req.body.active);
+    const reason = (req.body && req.body.reason) || `api:${req.ip || 'unknown'}`;
+    await setGlobalEmergencyStop(active, reason);
+    let shutdowns = [];
+    if (active) {
+      const online = Object.values(nodeCache).filter(n => n.status === 'online');
+      shutdowns = await Promise.all(online.map(n => emergencyShutdown(n.nodeId, `api e-stop: ${reason}`)));
+    }
+    res.json({ global_emergency_stop: active, reason, shutdowns });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 const __dirname = path.resolve();
