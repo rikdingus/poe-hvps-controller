@@ -1,0 +1,30 @@
+{
+  "$comment": "Devcontainer so either agent (or CI) can spin up an identical Linux env with all toolchains preinstalled. Useful for firmware CI builds and reproducible bug repros.",
+  "name": "HVPS Dev",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts",
+      "nodeGypDependencies": true
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "pip install --user platformio uv && npm i -g pnpm",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "platformio.platformio-ide",
+        "ms-azuretools.vscode-docker",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "editorconfig.editorconfig"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
