@@ -1,52 +1,52 @@
-# Research Station Alpha - PoE HVPS Controller
+# 🌌 Project Korstmos: Cosmic Ray Observatory
+**Kosmisch Onderzoek Radboud Studenten Meetopstelling**
 
-Research Station Alpha is an industrial-grade, 10-node High-Voltage Power Supply (HVPS) control system powered by PoE and managed via a unified, cloud-secure glassmorphic dashboard.
+Project Korstmos is an institutional-grade, 10-node Cosmic Ray Observatory powered by PoE and managed via a high-fidelity research dashboard. The system is optimized for scintillation-based muon detection and long-term scientific data acquisition.
 
-![Vision Poster](docs/vision_walkthrough.md#) <!-- Placeholder for vision poster -->
+---
 
-## 🚀 Quick Links & Guides
-We have developed a comprehensive documentation suite for every subsystem:
+## 🚀 Research & Documentation
+We have developed a comprehensive documentation suite for the observatory:
 
-### 🛠️ Hardware & Physical
+### 🔬 Scientific & Capture
+- **[High-Speed Pulse Capture](docs/high_speed_pulse_capture.md)**: Strategies for 20ns muon detection (PCNT).
+- **[Handoff Manifest](docs/handoff_manifest.md)**: **CRITICAL** pre-flight status and roadmap.
+- **[Vision Walkthrough](docs/vision_walkthrough.md)**: Project scope and research objectives.
+
+### 💾 Firmware & Control
+- **[Firmware Guide](docs/firmware.md)**: v1.1.0 API, Dynamic Calibration, and RDAC control.
+- **[Multi-Model Workflow](docs/multi_model_workflow.md)**: Strategic AI collaboration guidelines.
+- **[AGENTS.md](AGENTS.md)**: Coordination rules for Antigravity, Claude, and Gemini.
+
+### 🛠️ Hardware & Infrastructure
 - **[Installation Guide](docs/install_guide.md)**: End-to-end system deployment.
-- **[Wiring Checklist](docs/wiring_verification.md)**: Critical I2C and power verification.
-- **[Hardware Design Guide](docs/hardware_design_guide.md)**: PCB and component specifications.
-- **[UPS & Battery Guide](docs/ups_battery_guide.md)**: NetPower Lite 8P and LiFePO4 configuration.
-
-### 🌐 Networking & Remote Access
-- **[Remote Access Pro](docs/remote_access_pro.md)**: Tailscale Mesh and RustDesk Relay setup.
-- **[MikroTik WireGuard Setup](docs/mikrotik_wireguard_setup.md)**: P2P encrypted management.
-
-### 💾 Software & Management
-- **[System Integration Plan](docs/system_integration_plan.md)**: Architectural overview.
-- **[Multi-Model Workflow](docs/multi_model_workflow.md)**: Strategic AI handoff plan (Flash/Opus/Pro).
-- **[Vision Walkthrough](docs/vision_walkthrough.md)**: Project showcase and future goals.
+- **[Wiring Checklist](docs/wiring_verification.md)**: I2C and power verification.
+- **[UPS & Battery Guide](docs/ups_battery_guide.md)**: LiFePO4 configuration and SNMP safety.
+- **[Remote Access Pro](docs/remote_access_pro.md)**: Mesh networking and telemetry relay.
 
 ---
 
-## ⚡ Technical Core
-- **Firmware**: ESP32 (Olimex ESP32-POE-ISO-IND) with v1.1.5 Safe-Start (0.5kV).
-- **Control**: AD5282 Dual-Channel 12-bit Digital Potentiometers.
-- **Monitoring**: INA226 I2C Power Analytics.
-- **Interface**: Dockerized React + Node.js Proxy with AI Credit Monitoring.
+## ⚡ Technical Core (v1.1.0)
+- **Nodes**: Olimex ESP32-POE-ISO-IND (Isolated Industrial Grade).
+- **HV Control**: AD5282 Dual-Channel Digital Potentiometers with slew-rate ramping.
+- **Precision**: Dynamic Calibration API for multimeter-referenced feedback.
+- **Safety**: SNMP-driven PoE cutoff watchdog (`safety_guardian.js`).
 
 ---
 
-## 🛰️ Control API
+## 🛰️ Control API (v1.1.0)
 
-| Endpoint | Description |
-| :--- | :--- |
-| `/status` | Returns live telemetry (V, I, HV1/2, Pot positions, Calibration data). |
-| `/set?pot=1&val=128` | Set target for Channel 1 (0-255). |
-| `/set?ratio1=1025.5` | Update feedback ratio for CH1 (Dynamic Calibration). |
-| `/set?offset1=5.2` | Update feedback offset for CH1 (Dynamic Calibration). |
-| `/set?ramp=10` | Update slew rate ramp interval (ms/step). |
-| `/info` | System diagnostic information (MAC, IP, Firmware v1.1.0). |
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/status` | GET | Returns live telemetry (V, I, HV1/2, Pot positions, Cal parameters). |
+| `/set` | POST | Set target voltage (body: `pot=1&val=128`). |
+| `/set` | GET | Update calibration (query: `ratio1=1025.5&offset1=5.2`). |
+| `/info` | GET | System diagnostic information (MAC, IP, Uptime). |
 
 ---
 
 ## 🤝 Collaboration
-This project is designed for distributed research. All telemetry is logged via the Master Dashboard and can be exported for scientific analysis.
+This project is an open-source research initiative. All telemetry is logged to CSV for peer-reviewed scientific analysis.
 
-**Maintained by**: @rikdingus
-**Planning Phase**: Complete (May 2026)
+**Maintained by**: @rikdingus & The Korstmos AI Collective
+**Status**: Mission Ready (May 2026)
