@@ -4,15 +4,19 @@
 #  collaborate on github.com/rikdingus/poe-hvps-controller.
 #
 #  USAGE (PowerShell, as your normal user -- NOT admin):
-#     cd C:\Users\theon\Documents\Claude\Projects\HVPS
+#     cd <repo root>
 #     powershell -ExecutionPolicy Bypass -File .\setup-windows.ps1
 #
 #  Idempotent: each tool is only installed if missing. Re-run anytime.
 # ===================================================================
 
 $ErrorActionPreference = 'Continue'  # don't bail on a single failure
-$RepoUrl  = 'https://github.com/rikdingus/poe-hvps-controller.git'
-$RepoDir  = 'C:\Users\theon\Documents\Claude\Projects\HVPS'
+$RepoUrl = 'https://github.com/rikdingus/poe-hvps-controller.git'
+
+# Use the directory containing this script as the repo root.
+# $PSScriptRoot is set by PowerShell to the folder of the running script,
+# so this works correctly no matter who cloned the repo or where.
+$RepoDir = if ($PSScriptRoot) { $PSScriptRoot } else { $PWD.Path }
 
 # ----- helpers ------------------------------------------------------
 function Test-Cmd($name) { [bool](Get-Command $name -ErrorAction SilentlyContinue) }
@@ -43,6 +47,7 @@ if (-not (Test-Cmd winget)) {
     exit 1
 }
 Write-Host "  [OK]   winget present ($(winget --version))" -ForegroundColor Green
+Write-Host "  [INFO] Repo dir: $RepoDir" -ForegroundColor Cyan
 
 # ----- core tools ---------------------------------------------------
 Header 'Core: Git + GitHub CLI'
@@ -82,10 +87,10 @@ if (Test-Cmd pio) {
 
 # ----- antigravity-friendly nice-to-haves --------------------------
 Header 'Nice-to-haves'
-Install-Pkg 'jqlang.jq'            'jq'        'jq (JSON CLI)'
-Install-Pkg 'sharkdp.bat'          'bat'       'bat (cat++)'
-Install-Pkg 'BurntSushi.ripgrep.MSVC' 'rg'     'ripgrep'
-Install-Pkg 'sharkdp.fd'           'fd'        'fd (find++)'
+Install-Pkg 'jqlang.jq'               'jq'  'jq (JSON CLI)'
+Install-Pkg 'sharkdp.bat'             'bat' 'bat (cat++)'
+Install-Pkg 'BurntSushi.ripgrep.MSVC' 'rg'  'ripgrep'
+Install-Pkg 'sharkdp.fd'              'fd'  'fd (find++)'
 
 # ----- repo -----------------------------------------------------------
 Header "Repository: $RepoUrl"
