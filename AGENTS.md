@@ -35,6 +35,16 @@ for **scope** decisions; this file wins for **process** decisions.
 | Antigravity    | Google Antigravity IDE    | Gemini 3 Pro / Flash     | **Architect** + **Auditor** — scaffolding, security review |
 | Human (Rik)    | —                         | —                        | Tiebreaker, hardware bring-up, signs off on releases |
 
+## 🔬 Ongoing Research: High-Speed Capture
+As of May 6, 2026, we are investigating the detection of **20ns muon pulses** using the ESP32-POE nodes.
+- **Reference**: [Issue #6](https://github.com/rikdingus/poe-hvps-controller/issues/6)
+- **Technical Lead**: Antigravity / Claude
+- **Key Strategy**: Transition from software interrupts to the **ESP32 PCNT (Pulse Counter)** hardware peripheral.
+- **Agent Action**: All future firmware proposals must prioritize hardware-level capture to meet the 20ns timing requirement.
+
+---
+**Status**: Ready for hardware-level firmware implementation.
+
 A new agent joining the project should add itself to this table in its first PR.
 
 ---
