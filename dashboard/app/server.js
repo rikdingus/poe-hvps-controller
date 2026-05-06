@@ -29,8 +29,8 @@ const SNMP_COMMUNITY = process.env.SNMP_COMMUNITY || 'public';
 // OIDs for MikroTik NetPower 8P / RB5009
 const OIDS = {
   voltage: '.1.3.6.1.4.1.14988.1.1.3.10.0',
-  temp: '.1.3.6.1.4.1.14988.1.1.3.11.0',
-  cpu: '.1.3.6.1.4.1.14988.1.1.3.14.0'
+  temp:    '.1.3.6.1.4.1.14988.1.1.3.11.0',
+  cpu:     '.1.3.6.1.4.1.14988.1.1.3.14.0'
 };
 
 // MQTT Bridge Configuration
@@ -45,20 +45,19 @@ app.use(cors());
 app.use(express.json());
 
 // Paths to configurations
-const NODES_CONFIG = process.env.NODES_CONFIG || '../config/nodes.json';
-const SAFETY_CONFIG = '../config/safety_limits.json';
+const NODES_CONFIG   = process.env.NODES_CONFIG || '../config/nodes.json';
 const CREDITS_CONFIG = '../config/ai_credits.json';
 
-let nodeCache = {};
-let infraCache = { voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: null };
-let digitizerCache = { 
-  triggerRate: 0, 
-  coincidenceMode: '2-fold', 
-  activeChannels: 4, 
-  lastEvent: null 
+let nodeCache      = {};
+let infraCache     = { voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: null };
+let digitizerCache = {
+  triggerRate: 0,
+  coincidenceMode: '2-fold',
+  activeChannels: 4,
+  lastEvent: null
 };
 
-// SNMP Session with Auto-Retry
+// SNMP Session with Auto-Retry (used for infra polling only)
 let session;
 const createSnmpSession = () => {
   if (session) session.close();
@@ -68,7 +67,6 @@ const createSnmpSession = () => {
     backoff: 1.5
   });
 };
-
 createSnmpSession();
 
 const pollInfra = () => {
@@ -76,13 +74,12 @@ const pollInfra = () => {
     if (!error) {
       infraCache = {
         voltage: varbinds[0].value / 10,
-        temp: varbinds[1].value / 10,
-        cpu: varbinds[2].value,
+        temp:    varbinds[1].value / 10,
+        cpu:     varbinds[2].value,
         lastSeen: new Date(),
         error: null
       };
       infraCache.voltage = isNaN(infraCache.voltage) ? 0 : infraCache.voltage;
-      
       mqttClient.publish('korstmos/infra/health', JSON.stringify(infraCache), { retain: true });
     } else {
       console.warn(`[SNMP] Error polling ${MIKROTIK_IP}:`, error.message);
@@ -96,11 +93,11 @@ const pollInfra = () => {
 const pollDetectors = async () => {
   try {
     const rawNodes = await fs.readFile(NODES_CONFIG, 'utf-8');
-    const nodes = JSON.parse(rawNodes);
+    const nodes    = JSON.parse(rawNodes);
     const newCache = {};
 
-    // Make sure safety limits are loaded before mapping (so limit_kv is populated).
-    await loadSafetyConfig().catch(() => { /* mapper handles missing limits gracefully */ });
+    // Make sure safety limits are loaded before mapping
+    await loadSafetyConfig().catch(() => {});
 
     for (const node of nodes) {
       let mapped;
@@ -113,8 +110,8 @@ const pollDetectors = async () => {
 
         if (res.ok) {
           const rawStatus = await res.json();
-          let limits = {};
-          try { limits = getLimitsForNode(node.name); } catch { /* config not loaded yet */ }
+          // BUG FIX: use node.name ('HVPS-01' etc.) for safety limit lookup
+          const limits = getLimitsForNode(node.name) || {};
           mapped = mapStatusToNode(rawStatus, node, limits);
           mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(mapped), { retain: true });
         } else {
@@ -127,7 +124,7 @@ const pollDetectors = async () => {
       newCache[node.id] = mapped;
     }
     nodeCache = newCache;
-    
+
     // Simulate Digitizer Muon Logic
     digitizerCache = {
       ...digitizerCache,
@@ -135,24 +132,28 @@ const pollDetectors = async () => {
       lastEvent: new Date().toISOString()
     };
 
-    logTelemetry(Object.values(nodeCache), infraCache).catch(e => console.error('[LOGGER]', e.message));
-    // Fire-and-forget but ALWAYS catch -- a guardian crash must not kill the polling loop.
-    checkSafety(Object.values(nodeCache)).catch(e => console.error('[GUARDIAN] checkSafety failed:', e.message));
+    // Both are async
+    logTelemetry(Object.values(nodeCache), infraCache)
+      .catch(e => console.error('[LOGGER]', e.message));
+    checkSafety(Object.values(nodeCache))
+      .catch(e => console.error('[GUARDIAN] checkSafety failed:', e.message));
+
   } catch (err) {
     console.error('Korstmos Polling Error:', err);
   }
 };
 
 setInterval(pollDetectors, 2000);
-setInterval(pollInfra, 5000);
+setInterval(pollInfra,     5000);
 
+// ---- Detector / digitizer / infra endpoints -------------------------
 app.get('/api/detectors', (req, res) => res.json(Object.values(nodeCache)));
-app.get('/api/digitizer', (req, res) => res.json(digitizerCache));
-app.get('/api/infra', (req, res) => res.json(infraCache));
+app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
+app.get('/api/infra',      (req, res) => res.json(infraCache));
 
 app.post('/api/reboot-detector/:id', async (req, res) => {
   const nodeId = req.params.id;
-  const nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
+  const nodes  = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
   const target = nodes.find(n => n.id == nodeId);
   if (target && target.poe_port) {
     console.log(`[KORSTMOS] Power cycling Detector ${nodeId} on port ${target.poe_port}`);
@@ -167,12 +168,12 @@ app.get('/api/credits', async (req, res) => {
   res.json(JSON.parse(data));
 });
 
-// ---- Safety endpoints ---------------------------------------------------
-// GET /api/safety-status -> current global flag + per-node effective limits
+// ---- Safety endpoints -----------------------------------------------
 app.get('/api/safety-status', async (req, res) => {
   try {
     await loadSafetyConfig();
-    const nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
+    const rawNodes = await fs.readFile(NODES_CONFIG, 'utf-8');
+    const nodes = JSON.parse(rawNodes);
     const limits = nodes.map(n => ({ name: n.name, ...getLimitsForNode(n.name) }));
     res.json({ global_emergency_stop: isGlobalEmergencyStop(), limits });
   } catch (e) {
@@ -180,13 +181,10 @@ app.get('/api/safety-status', async (req, res) => {
   }
 });
 
-// POST /api/emergency-stop {active: true|false, reason?: string}
-// Persists global_emergency_stop in safety_limits.json. If activating, also
-// triggers immediate shutdown of every currently-online detector.
 app.post('/api/emergency-stop', async (req, res) => {
   try {
-    const active = !!(req.body && req.body.active);
-    const reason = (req.body && req.body.reason) || `api:${req.ip || 'unknown'}`;
+    const active  = !!(req.body && req.body.active);
+    const reason  = (req.body && req.body.reason) || `api:${req.ip || 'unknown'}`;
     await setGlobalEmergencyStop(active, reason);
     let shutdowns = [];
     if (active) {
@@ -199,6 +197,7 @@ app.post('/api/emergency-stop', async (req, res) => {
   }
 });
 
+// ---- Static / SPA ---------------------------------------------------
 const __dirname = path.resolve();
 app.use(express.static(path.join(__dirname, 'dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
