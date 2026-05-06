@@ -3,7 +3,14 @@
 ## 📌 Overview
 The Korstmos Scintillator Units generate extremely fast pulses (~20ns) upon muon detection. Standard GPIO interrupts on the ESP32-POE are insufficient for this timescale due to interrupt service routine (ISR) latency (~2µs).
 
-## 🛠️ Capture Strategies
+## ⚡ Performance Limits & Capable Width
+For the Korstmos project, we must differentiate between software-limited and hardware-native detection capabilities:
+
+| Method | Min Pulse Width | 20ns Muon Status | Rationale |
+| :--- | :--- | :--- | :--- |
+| **GPIO Interrupt** | ~2,000ns | ❌ **Invisible** | CPU ISR latency is 100x slower than the pulse. |
+| **ESP32 PCNT** | **12.5ns** | ✅ **Detected** | 1 clock cycle @ 80MHz (APB bus). |
+| **MCPWM Capture** | 6.25ns | ✅ **Detected** | 1 clock cycle @ 160MHz (PWM timer). |
 
 ### 1. Hardware Pulse Counter (PCNT) — RECOMMENDED
 The ESP32 includes a dedicated PCNT peripheral capable of counting pulses as short as **12.5ns**.
