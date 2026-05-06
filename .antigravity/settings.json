@@ -1,0 +1,55 @@
+{
+  "$comment": "Workspace-scoped Antigravity settings. Repo defaults — override per-user in Antigravity GUI if needed.",
+  "workspace": {
+    "name": "Project Korstmos (HVPS)",
+    "rulesFile": ".antigravity/rules.md",
+    "agentsFile": "AGENTS.md"
+  },
+  "agent": {
+    "identity": "antigravity",
+    "branchPrefix": "antigravity/",
+    "commitPrefix": "[antigravity]",
+    "defaultModel": "gemini-3-pro",
+    "fastModel": "gemini-3-flash"
+  },
+  "terminal": {
+    "autoExecution": "request-review",
+    "autoAllow": [
+      "git status",
+      "git fetch",
+      "git diff",
+      "git log",
+      "gh pr list",
+      "gh pr view",
+      "npm run build",
+      "npm test",
+      "pnpm test",
+      "pnpm run build",
+      "pio check",
+      "node --version",
+      "python -V",
+      "ls",
+      "cat",
+      "rg"
+    ],
+    "alwaysAsk": [
+      "git push",
+      "gh pr merge",
+      "pio run --target upload",
+      "docker compose up",
+      "docker compose down",
+      "rm",
+      "sudo"
+    ]
+  },
+  "files": {
+    "humanOnly": [
+      "dashboard/config/safety_limits.json",
+      "hardware/*.kicad_pro",
+      "hardware/*.kicad_sch"
+    ],
+    "appendOnly": [
+      "LLM_CONTEXT.md"
+    ]
+  }
+}
