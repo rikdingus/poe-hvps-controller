@@ -10,7 +10,7 @@
 //      throw -- the polling loop must not run without limits.
 //    * SNMP shutdown is factored into a private function and overridable
 //      via _setShutdownForTesting() so unit tests don't touch the network.
-//    * checkSafety() is now async; the caller (server.js pollDetectors)
+//    * checkSafety() is async; the caller (server.js pollDetectors)
 //      should `.catch()` it so a guardian error never crashes the loop.
 //    * net-snmp is imported lazily so unit tests that mock the shutdown
 //      path never need the dependency.
@@ -28,15 +28,16 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const MIKROTIK_IP            = process.env.MIKROTIK_IP            || '192.168.88.1';
-const SNMP_COMMUNITY_WRITE   = process.env.SNMP_COMMUNITY_WRITE   || 'private';
-const SAFETY_CONFIG_PATH     = process.env.SAFETY_CONFIG          || path.resolve(process.cwd(), '../config/safety_limits.json');
+const MIKROTIK_IP          = process.env.MIKROTIK_IP          || '192.168.88.1';
+const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';
+const SAFETY_CONFIG_PATH   = process.env.SAFETY_CONFIG        || path.resolve(process.cwd(), '../config/safety_limits.json');
 // MikroTik PoE control OID. Values: 1=auto-on, 2=forced-on, 3=off.
-const POE_CONTROL_OID        = '.1.3.6.1.4.1.14988.1.1.15.1.1.2';
+const POE_CONTROL_OID      = '.1.3.6.1.4.1.14988.1.1.15.1.1.2';
 
 let _config        = null;   // cached parsed JSON
 let _configMtimeMs = null;   // mtime when last loaded (for hot-reload)
-let _snmpSession   = null;   // lazy SNMP session
+let _snmpModule    = null;   // lazily imported net-snmp module
+let _snmpSession   = null;   // SNMP session (reused across calls)
 let _shutdownFn    = null;   // injectable for testing
 
 // --- Config loader (hot-reloads on file mtime change) ---------------
@@ -53,9 +54,9 @@ export async function loadSafetyConfig(force = false) {
     if (!force && _configMtimeMs && stat.mtimeMs === _configMtimeMs) return _config;
 
     try {
-        const raw = await fs.readFile(SAFETY_CONFIG_PATH, 'utf-8');
+        const raw    = await fs.readFile(SAFETY_CONFIG_PATH, 'utf-8');
         const parsed = JSON.parse(raw);
-        _config = parsed;
+        _config        = parsed;
         _configMtimeMs = stat.mtimeMs;
         console.log(`[GUARDIAN] Loaded safety_limits.json (mtime ${new Date(stat.mtimeMs).toISOString()})`);
         return _config;
@@ -66,11 +67,11 @@ export async function loadSafetyConfig(force = false) {
     }
 }
 
-// --- Per-node limit lookup (defaults merged with override) -----------
+// --- Per-node limit lookup (defaults merged with per-node override) --
 export function getLimitsForNode(nodeName) {
     if (!_config) throw new Error('Safety config not loaded -- call loadSafetyConfig() first');
     const def      = _config.default_limits      || {};
-    const override = (_config.channel_overrides || {})[nodeName] || {};
+    const override = (_config.channel_overrides  || {})[nodeName] || {};
     return { ...def, ...override };
 }
 
@@ -88,20 +89,22 @@ export async function setGlobalEmergencyStop(value, reason = 'manual') {
     return _config.global_emergency_stop;
 }
 
-// --- SNMP-driven shutdown (factored so tests inject a fake) --------
+// --- SNMP-driven PoE shutdown (lazily init, overridable for tests) --
 async function _defaultShutdown(nodeId) {
-    if (!_snmpSession) {
-        const snmp = (await import('net-snmp')).default;
-        _snmpSession = snmp.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE);
-        _snmpSession.__snmpModule = snmp;
+    // Lazy-import net-snmp so that test code that never calls this path
+    // doesn't need the native binding.
+    if (!_snmpModule) {
+        _snmpModule = (await import('net-snmp')).default;
     }
-    const snmp = _snmpSession.__snmpModule;
+    if (!_snmpSession) {
+        _snmpSession = _snmpModule.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE);
+    }
     // Mapping: detector node N -> MikroTik PoE port N+1.
     const portIndex = nodeId + 1;
     const oid = `${POE_CONTROL_OID}.${portIndex}`;
     return new Promise((resolve, reject) => {
         _snmpSession.set(
-            [{ oid, type: snmp.ObjectType.Integer, value: 3 }],
+            [{ oid, type: _snmpModule.ObjectType.Integer, value: 3 }],
             (error) => error ? reject(error) : resolve()
         );
     });
@@ -137,10 +140,11 @@ export async function checkSafety(nodeData) {
         return { violations: online.map(n => ({ nodeId: n.nodeId, reason: 'global_emergency_stop' })) };
     }
 
-    // Per-node check
+    // Per-node check (sequential: shut one node down fully before moving to the next,
+    // which avoids flooding the SNMP switch with simultaneous OID writes).
     const violations = [];
     for (const node of (nodeData || [])) {
-        // Tolerate offline / malformed nodes -- never crash the polling loop here.
+        // Tolerate offline / malformed nodes -- never crash the polling loop.
         if (!node || node.status !== 'online' || !Array.isArray(node.channels)) continue;
 
         const limits = getLimitsForNode(node.name);
