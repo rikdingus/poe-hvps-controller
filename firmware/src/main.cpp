@@ -19,11 +19,11 @@
 
 // --- HV Feedback Calibration ---
 // Adjust these after measuring with a known reference.
-// output_kV = (adc_volts * HV_CAL_GAIN) + HV_CAL_OFFSET
-#define HV1_CAL_GAIN   1000.0  // default 1V = 1000V
-#define HV1_CAL_OFFSET 0.0
-#define HV2_CAL_GAIN   1000.0
-#define HV2_CAL_OFFSET 0.0
+// output_kV = (adc_volts * gain) + offset
+float hv1_gain = 1000.0;     // Default 1V = 1000V
+float hv1_offset = 0.0;
+float hv2_gain = 1000.0;
+float hv2_offset = 0.0;
 
 // --- Devices ---
 INA226 INA(0x40);
@@ -48,7 +48,7 @@ bool eth_connected = false;
 unsigned long lastSensorRead = 0;
 unsigned long uptime_seconds = 0;
 
-const unsigned long RAMP_INTERVAL = 4;    // ~1s for full 0-255 sweep
+unsigned long ramp_interval = 4;    // ~1s for full 0-255 sweep
 const unsigned long SENSOR_INTERVAL = 500; // Read sensors every 500ms
 
 // --- AD5282 Digital Pot Driver ---
@@ -64,7 +64,7 @@ void processSlewRate() {
   unsigned long now = millis();
 
   // Channel 1
-  if (ch1.current != ch1.target && now - ch1.lastStep > RAMP_INTERVAL) {
+  if (ch1.current != ch1.target && now - ch1.lastStep > ramp_interval) {
     if (ch1.current < ch1.target) ch1.current++;
     else ch1.current--;
     updateHardwarePot(0, ch1.current);
@@ -72,7 +72,7 @@ void processSlewRate() {
   }
 
   // Channel 2
-  if (ch2.current != ch2.target && now - ch2.lastStep > RAMP_INTERVAL) {
+  if (ch2.current != ch2.target && now - ch2.lastStep > ramp_interval) {
     if (ch2.current < ch2.target) ch2.current++;
     else ch2.current--;
     updateHardwarePot(1, ch2.current);
@@ -97,8 +97,8 @@ void readSensors() {
 
   // Log telemetry for testing
   Serial.printf("[HVPS] CH1: %.2f kV | CH2: %.2f kV | PoE: %.2fV @ %.2fA\n", 
-    hv1_feedback * HV1_CAL_GAIN / 1000.0, 
-    hv2_feedback * HV2_CAL_GAIN / 1000.0, 
+    hv1_feedback * hv1_gain / 1000.0, 
+    hv2_feedback * hv2_gain / 1000.0, 
     poe_voltage, poe_current);
 }
 
@@ -229,10 +229,10 @@ void setup() {
   // Register Ethernet events BEFORE ETH.begin()
   WiFi.onEvent(onEthEvent);
 
-  // I2C (Pin Swap Test: SDA=16, SCL=13, Slow Clock)
-  Wire.begin(16, 13, 100000); 
-  pinMode(16, INPUT_PULLUP);
+  // I2C — Olimex ESP32-POE: SDA=13, SCL=16
+  Wire.begin(13, 16, 100000); 
   pinMode(13, INPUT_PULLUP);
+  pinMode(16, INPUT_PULLUP);
 
   delay(5000); // Wait for peripherals to stabilize
 
@@ -284,20 +284,27 @@ void setup() {
     doc["c1"] = ch1.current;  // Actual position
     doc["c2"] = ch2.current;
     doc["ok"] = ina_ok;
-    doc["hv1g"] = HV1_CAL_GAIN;
-    doc["hv1o"] = HV1_CAL_OFFSET;
-    doc["hv2g"] = HV2_CAL_GAIN;
-    doc["hv2o"] = HV2_CAL_OFFSET;
+    doc["hv1g"] = hv1_gain;
+    doc["hv1o"] = hv1_offset;
+    doc["hv2g"] = hv2_gain;
+    doc["hv2o"] = hv2_offset;
     String res;
     serializeJson(doc, res);
     request->send(200, "application/json", res);
   });
 
   server.on("/set", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (request->hasParam("ratio1")) hv1_gain = request->getParam("ratio1")->value().toFloat();
+    if (request->hasParam("ratio2")) hv2_gain = request->getParam("ratio2")->value().toFloat();
+    if (request->hasParam("offset1")) hv1_offset = request->getParam("offset1")->value().toFloat();
+    if (request->hasParam("offset2")) hv2_offset = request->getParam("offset2")->value().toFloat();
+    if (request->hasParam("ramp")) ramp_interval = request->getParam("ramp")->value().toInt();
+    
     if (!request->hasParam("pot") || !request->hasParam("val")) {
-      request->send(400, "text/plain", "Missing parameters");
+      request->send(200, "text/plain", "Settings Updated");
       return;
     }
+    
     int p = request->getParam("pot")->value().toInt();
     int v = constrain(request->getParam("val")->value().toInt(), 0, 255);
     if (p == 1) {
@@ -319,6 +326,7 @@ void setup() {
     doc["ip"] = ETH.localIP().toString();
     doc["eth"] = eth_connected;
     doc["ina"] = ina_ok;
+    doc["ramp"] = ramp_interval;
     doc["ch1_target"] = ch1.target;
     doc["ch1_current"] = ch1.current;
     doc["ch2_target"] = ch2.target;

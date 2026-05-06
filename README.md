@@ -32,6 +32,19 @@ We have developed a comprehensive documentation suite for every subsystem:
 
 ---
 
+## 🛰️ Control API
+
+| Endpoint | Description |
+| :--- | :--- |
+| `/status` | Returns live telemetry (V, I, HV1/2, Pot positions, Calibration data). |
+| `/set?pot=1&val=128` | Set target for Channel 1 (0-255). |
+| `/set?ratio1=1025.5` | Update feedback ratio for CH1 (Dynamic Calibration). |
+| `/set?offset1=5.2` | Update feedback offset for CH1 (Dynamic Calibration). |
+| `/set?ramp=10` | Update slew rate ramp interval (ms/step). |
+| `/info` | System diagnostic information (MAC, IP, Firmware v1.1.0). |
+
+---
+
 ## 🤝 Collaboration
 This project is designed for distributed research. All telemetry is logged via the Master Dashboard and can be exported for scientific analysis.
 
