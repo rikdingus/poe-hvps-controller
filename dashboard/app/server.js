@@ -6,7 +6,15 @@ import fetch from 'node-fetch';
 import mqtt from 'mqtt';
 import snmp from 'net-snmp';
 import { initLogger, logTelemetry } from './telemetry_logger.js';
-import { checkSafety } from './safety_guardian.js';
+import {
+    checkSafety,
+    loadSafetyConfig,
+    isGlobalEmergencyStop,
+    setGlobalEmergencyStop,
+    getLimitsForNode,
+    emergencyShutdown,
+} from './safety_guardian.js';
+import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
 
 const app = express();
 const PORT = 3000;
@@ -91,42 +99,32 @@ const pollDetectors = async () => {
     const nodes = JSON.parse(rawNodes);
     const newCache = {};
 
+    // Make sure safety limits are loaded before mapping (so limit_kv is populated).
+    await loadSafetyConfig().catch(() => { /* mapper handles missing limits gracefully */ });
+
     for (const node of nodes) {
+      let mapped;
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1500);
-        
+
         const res = await fetch(`http://${node.ip}/status`, { signal: controller.signal });
         clearTimeout(timeoutId);
-        
+
         if (res.ok) {
           const rawStatus = await res.json();
-          newCache[node.id] = { 
-            nodeId: node.id,
-            name: `Detector-${node.id.toString().padStart(2, '0')}`,
-            status: 'online', 
-            channels: [
-              { 
-                ch: 1, 
-                target_kv: rawStatus.p1 / 1000,
-                current_kv: (rawStatus.hv1 * rawStatus.hv1g + rawStatus.hv1o) / 1000,
-                limit_kv: 3.0 
-              }
-            ],
-            power: { v: rawStatus.v, a: rawStatus.i, w: rawStatus.v * rawStatus.i },
-            ups: { 
-              battery_pct: rawStatus.batt || 100, 
-              source: rawStatus.v > 30 ? 'dc' : 'battery' 
-            },
-            lastSeen: new Date() 
-          };
-          mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(newCache[node.id]), { retain: true });
+          let limits = {};
+          try { limits = getLimitsForNode(node.name); } catch { /* config not loaded yet */ }
+          mapped = mapStatusToNode(rawStatus, node, limits);
+          mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(mapped), { retain: true });
         } else {
-          newCache[node.id] = { ...node, status: 'error', lastSeen: new Date() };
+          mapped = buildOfflineNode(node, 'error', `HTTP ${res.status}`);
         }
       } catch (e) {
-        newCache[node.id] = { ...node, status: 'offline', lastSeen: new Date() };
+        const reason = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'unknown';
+        mapped = buildOfflineNode(node, 'offline', reason);
       }
+      newCache[node.id] = mapped;
     }
     nodeCache = newCache;
     
@@ -137,8 +135,9 @@ const pollDetectors = async () => {
       lastEvent: new Date().toISOString()
     };
 
-    logTelemetry(Object.values(nodeCache), infraCache);
-    checkSafety(Object.values(nodeCache));
+    logTelemetry(Object.values(nodeCache), infraCache).catch(e => console.error('[LOGGER]', e.message));
+    // Fire-and-forget but ALWAYS catch -- a guardian crash must not kill the polling loop.
+    checkSafety(Object.values(nodeCache)).catch(e => console.error('[GUARDIAN] checkSafety failed:', e.message));
   } catch (err) {
     console.error('Korstmos Polling Error:', err);
   }
@@ -166,6 +165,38 @@ app.post('/api/reboot-detector/:id', async (req, res) => {
 app.get('/api/credits', async (req, res) => {
   const data = await fs.readFile(CREDITS_CONFIG, 'utf-8');
   res.json(JSON.parse(data));
+});
+
+// ---- Safety endpoints ---------------------------------------------------
+// GET /api/safety-status -> current global flag + per-node effective limits
+app.get('/api/safety-status', async (req, res) => {
+  try {
+    await loadSafetyConfig();
+    const nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
+    const limits = nodes.map(n => ({ name: n.name, ...getLimitsForNode(n.name) }));
+    res.json({ global_emergency_stop: isGlobalEmergencyStop(), limits });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/emergency-stop {active: true|false, reason?: string}
+// Persists global_emergency_stop in safety_limits.json. If activating, also
+// triggers immediate shutdown of every currently-online detector.
+app.post('/api/emergency-stop', async (req, res) => {
+  try {
+    const active = !!(req.body && req.body.active);
+    const reason = (req.body && req.body.reason) || `api:${req.ip || 'unknown'}`;
+    await setGlobalEmergencyStop(active, reason);
+    let shutdowns = [];
+    if (active) {
+      const online = Object.values(nodeCache).filter(n => n.status === 'online');
+      shutdowns = await Promise.all(online.map(n => emergencyShutdown(n.nodeId, `api e-stop: ${reason}`)));
+    }
+    res.json({ global_emergency_stop: active, reason, shutdowns });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 const __dirname = path.resolve();
