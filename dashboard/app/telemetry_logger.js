@@ -10,7 +10,7 @@ export async function initLogger() {
     try {
       await fs.access(TELEMETRY_FILE);
     } catch {
-      const header = 'timestamp,node_id,status,kv,ma,watts,infra_v,infra_temp\n';
+      const header = 'timestamp,node_id,status,kv1,kv2,ma,watts,infra_v,infra_temp\n';
       await fs.writeFile(TELEMETRY_FILE, header);
     }
     console.log(`[LOGGER] Telemetry active: ${TELEMETRY_FILE}`);
@@ -23,7 +23,11 @@ export async function logTelemetry(nodeData, infraData) {
   try {
     const timestamp = new Date().toISOString();
     const rows = nodeData.map(node => {
-      return `${timestamp},${node.nodeId},${node.status},${node.channels[0].current_kv},${(node.power.a * 1000).toFixed(2)},${node.power.w},${infraData.voltage},${infraData.temp}`;
+      const kv1 = (node.channels && node.channels[0]) ? node.channels[0].current_kv : 0;
+      const kv2 = (node.channels && node.channels[1]) ? node.channels[1].current_kv : 0;
+      const ma = (node.power && node.power.a) ? (node.power.a * 1000).toFixed(2) : 0;
+      const w = (node.power && node.power.w) ? node.power.w.toFixed(2) : 0;
+      return `${timestamp},${node.nodeId},${node.status},${kv1},${kv2},${ma},${w},${infraData.voltage},${infraData.temp}`;
     }).join('\n') + '\n';
     
     await fs.appendFile(TELEMETRY_FILE, rows);

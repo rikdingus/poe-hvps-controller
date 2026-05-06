@@ -14,6 +14,7 @@ import {
     getLimitsForNode,
     emergencyShutdown,
 } from './safety_guardian.js';
+import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
 
 const app = express();
 const PORT = 3000;
@@ -98,42 +99,32 @@ const pollDetectors = async () => {
     const nodes = JSON.parse(rawNodes);
     const newCache = {};
 
+    // Make sure safety limits are loaded before mapping (so limit_kv is populated).
+    await loadSafetyConfig().catch(() => { /* mapper handles missing limits gracefully */ });
+
     for (const node of nodes) {
+      let mapped;
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1500);
-        
+
         const res = await fetch(`http://${node.ip}/status`, { signal: controller.signal });
         clearTimeout(timeoutId);
-        
+
         if (res.ok) {
           const rawStatus = await res.json();
-          newCache[node.id] = { 
-            nodeId: node.id,
-            name: `Detector-${node.id.toString().padStart(2, '0')}`,
-            status: 'online', 
-            channels: [
-              { 
-                ch: 1, 
-                target_kv: rawStatus.p1 / 1000,
-                current_kv: (rawStatus.hv1 * rawStatus.hv1g + rawStatus.hv1o) / 1000,
-                limit_kv: 3.0 
-              }
-            ],
-            power: { v: rawStatus.v, a: rawStatus.i, w: rawStatus.v * rawStatus.i },
-            ups: { 
-              battery_pct: rawStatus.batt || 100, 
-              source: rawStatus.v > 30 ? 'dc' : 'battery' 
-            },
-            lastSeen: new Date() 
-          };
-          mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(newCache[node.id]), { retain: true });
+          let limits = {};
+          try { limits = getLimitsForNode(node.name); } catch { /* config not loaded yet */ }
+          mapped = mapStatusToNode(rawStatus, node, limits);
+          mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(mapped), { retain: true });
         } else {
-          newCache[node.id] = { ...node, status: 'error', lastSeen: new Date() };
+          mapped = buildOfflineNode(node, 'error', `HTTP ${res.status}`);
         }
       } catch (e) {
-        newCache[node.id] = { ...node, status: 'offline', lastSeen: new Date() };
+        const reason = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'unknown';
+        mapped = buildOfflineNode(node, 'offline', reason);
       }
+      newCache[node.id] = mapped;
     }
     nodeCache = newCache;
     

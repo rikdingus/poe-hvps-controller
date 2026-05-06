@@ -104,7 +104,10 @@ export default function App() {
           nodeId: i + 1,
           name: `Detector-${i+1}`,
           status: 'online',
-          channels: [{ ch: 1, target_kv: 1.2, current_kv: 1.2 + (Math.random()*0.02), limit_kv: 2.5 }],
+          channels: [
+            { ch: 1, target_kv: 1.2, current_kv: 1.2 + (Math.random()*0.02), limit_kv: 2.5 },
+            { ch: 2, target_kv: 1.2, current_kv: 1.15 + (Math.random()*0.02), limit_kv: 2.5 }
+          ],
           power: { v: 48.2, a: 0.12, w: 5.8 },
           ups: { battery_pct: 100, source: 'dc' }
         }));
