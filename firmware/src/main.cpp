@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <driver/pcnt.h>
+#include <ArduinoOTA.h>
 
 // --- Firmware Info ---
 #define FW_VERSION "1.1.0"
@@ -172,6 +173,28 @@ void addCorsHeaders(AsyncWebServerResponse* response) {
   response->addHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+// --- OTA Setup ---
+void setupOTA() {
+  ArduinoOTA.onStart([]() {
+    String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
+    Serial.println("[OTA] Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] End");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+}
+
 // --- Ethernet Event Handler ---
 void onEthEvent(WiFiEvent_t event) {
   switch (event) {
@@ -182,6 +205,8 @@ void onEthEvent(WiFiEvent_t event) {
     case ARDUINO_EVENT_ETH_GOT_IP:
       Serial.printf("[ETH] IP: %s\n", ETH.localIP().toString().c_str());
       eth_connected = true;
+      setupOTA();
+      ArduinoOTA.begin();
       if (MDNS.begin("hvps")) {
         MDNS.addService("http", "tcp", 80);
       }
@@ -314,6 +339,7 @@ void setup() {
 }
 
 void loop() {
+  ArduinoOTA.handle();
   processSlewRate();
   readSensors();
   delay(1);
