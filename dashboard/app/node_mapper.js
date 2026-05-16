@@ -148,15 +148,17 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
             buildChannel(2, 'hv2', 'p2', 'c2', rawStatus.h2 || 0, Number(h2_hz.toFixed(2)))
         ],
         power: {
-            v: _toFiniteNumber(rawStatus.v),
+            v: _toFiniteNumber(rawStatus.v) || _toFiniteNumber(rawStatus.bv),  // INA226 or on-board sensor
             a: _toFiniteNumber(rawStatus.i),                          // firmware names it `i`, not `a`
-            w: _toFiniteNumber(rawStatus.v) * _toFiniteNumber(rawStatus.i)
+            w: _toFiniteNumber(rawStatus.v) * _toFiniteNumber(rawStatus.i),
+            board_v: _toFiniteNumber(rawStatus.bv),  // Olimex on-board voltage (GPIO35)
+            ext_power: !!rawStatus.ep                 // External power detected (GPIO39)
         },
         ups: {
             // Firmware doesn't yet report battery state -- defaults until UPS
-            // telemetry is wired up. Source heuristic: PoE rail >30V => mains.
+            // telemetry is wired up. Source heuristic: ext_power flag from GPIO39.
             battery_pct: _toFiniteIntegerOrNull(rawStatus.batt),
-            source: _toFiniteNumber(rawStatus.v) > 30 ? 'dc' : 'battery'
+            source: rawStatus.ep ? 'dc' : 'battery'
         },
         sensor_ok: !!rawStatus.ok,
         lastSeen: new Date().toISOString(),

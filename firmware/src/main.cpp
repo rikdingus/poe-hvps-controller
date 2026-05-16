@@ -21,6 +21,11 @@
 #define PULSE_PIN_1 14
 #define PULSE_PIN_2 15
 
+// --- Olimex On-Board Power Sensing ---
+#define POWER_SENSE 39   // Digital: HIGH = external power present
+#define BATTERY_PIN 35   // ADC: input voltage via 2:1 resistor divider
+const float RESISTOR_COEFF = 2.0;  // R1+R7 / R7 per Olimex schematic
+
 // --- PCNT Pulse Tracking ---
 #define PCNT_H_LIM_VAL 10000
 volatile uint32_t pcnt0_overflows = 0;
@@ -117,6 +122,8 @@ bool ina_ok        = false;
 bool eth_connected = false;
 unsigned long lastSensorRead = 0;
 unsigned long uptime_seconds = 0;
+float board_voltage = 0;    // Olimex on-board voltage measurement
+bool  ext_power     = false; // External power (PoE) present flag
 
 const unsigned long SENSOR_INTERVAL = 500; // Read sensors every 500ms
 
@@ -158,6 +165,8 @@ void readSensors() {
   }
   hv1_feedback = analogReadMilliVolts(ADC_HV1) / 1000.0f;
   hv2_feedback = analogReadMilliVolts(ADC_HV2) / 1000.0f;
+  board_voltage = analogReadMilliVolts(BATTERY_PIN) * RESISTOR_COEFF / 1000.0f;
+  ext_power = digitalRead(POWER_SENSE);
   uptime_seconds = millis() / 1000;
 
   // Log telemetry
@@ -241,6 +250,11 @@ void setup() {
   Wire.begin(I2C_SDA, I2C_SCL);
   ETH.begin();
 
+  // Olimex on-board power sensing
+  pinMode(POWER_SENSE, INPUT);
+  pinMode(BATTERY_PIN, INPUT);
+  analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
+
   initPCNT();
 
   ina_ok = INA.begin();
@@ -282,6 +296,8 @@ void setup() {
     doc["hv2o"] = hv2_offset;
     doc["h1"]  = getHits(PCNT_UNIT_0);
     doc["h2"]  = getHits(PCNT_UNIT_1);
+    doc["bv"]  = board_voltage;
+    doc["ep"]  = ext_power;
     String res;
     serializeJson(doc, res);
     auto *resp = req->beginResponse(200, "application/json", res);
