@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "start": "node server.js",
     "audit": "node audit_environment.js",
-    "test": "node --test *.test.js"
+    "test": "node --test"
   },
   "devDependencies": {
     "autoprefixer": "^10.5.0",
