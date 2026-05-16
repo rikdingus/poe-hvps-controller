@@ -163,7 +163,7 @@ app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
 app.get('/api/infra',      (req, res) => res.json(infraCache));
 
 // MikroTik PoE control OID. Values: 1=auto-on, 2=forced-on, 3=off.
-const POE_CONTROL_OID = '.1.3.6.1.4.1.14988.1.1.15.1.1.2';
+const POE_CONTROL_OID = '1.3.6.1.4.1.14988.1.1.15.1.1.2';
 const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';
 
 // Set a single PoE port to a desired RouterOS state. Resolves on success,
