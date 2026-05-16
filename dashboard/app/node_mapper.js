@@ -34,6 +34,8 @@
 //  and the frontend should display the raw pot setpoint instead.
 // =====================================================================
 
+const hitState = new Map();
+
 /**
  * Build a canonical Node object representing an offline detector. Used
  * when fetch times out, returns non-OK, or throws.
@@ -72,6 +74,33 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
         return buildOfflineNode(nodeConfig, 'error', 'empty firmware response');
     }
 
+    const now = Date.now();
+    let h1_hz = 0;
+    let h2_hz = 0;
+
+    const prevState = hitState.get(nodeConfig.id);
+    if (prevState) {
+        const dt = (now - prevState.time) / 1000.0;
+        if (dt > 0) {
+            if (rawStatus.h1 >= prevState.h1) {
+                h1_hz = (rawStatus.h1 - prevState.h1) / dt;
+            } else {
+                h1_hz = (rawStatus.h1 || 0) / dt;
+            }
+            if (rawStatus.h2 >= prevState.h2) {
+                h2_hz = (rawStatus.h2 - prevState.h2) / dt;
+            } else {
+                h2_hz = (rawStatus.h2 || 0) / dt;
+            }
+        }
+    }
+
+    hitState.set(nodeConfig.id, {
+        time: now,
+        h1: rawStatus.h1 || 0,
+        h2: rawStatus.h2 || 0
+    });
+
     const limitKv = (limits.max_hv_volts != null)
         ? limits.max_hv_volts / 1000
         : null;
@@ -79,7 +108,7 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
         ? nodeConfig.kv_per_step
         : null;
 
-    const buildChannel = (chNum, hvKey, potTargetKey, potCurrentKey) => {
+    const buildChannel = (chNum, hvKey, potTargetKey, potCurrentKey, hitsVal, hzVal) => {
         const gainKey   = `hv${chNum}g`;
         const offsetKey = `hv${chNum}o`;
 
@@ -104,7 +133,9 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
             current_kv,
             target_pot,
             current_pot,
-            limit_kv: limitKv
+            limit_kv: limitKv,
+            hits: hitsVal,
+            hz: hzVal
         };
     };
 
@@ -113,19 +144,21 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
         name: nodeConfig.name || `Detector-${String(nodeConfig.id).padStart(2, '0')}`,
         status: 'online',
         channels: [
-            buildChannel(1, 'hv1', 'p1', 'c1'),
-            buildChannel(2, 'hv2', 'p2', 'c2')
+            buildChannel(1, 'hv1', 'p1', 'c1', rawStatus.h1 || 0, Number(h1_hz.toFixed(2))),
+            buildChannel(2, 'hv2', 'p2', 'c2', rawStatus.h2 || 0, Number(h2_hz.toFixed(2)))
         ],
         power: {
-            v: _toFiniteNumber(rawStatus.v),
+            v: _toFiniteNumber(rawStatus.v) || _toFiniteNumber(rawStatus.bv),  // INA226 or on-board sensor
             a: _toFiniteNumber(rawStatus.i),                          // firmware names it `i`, not `a`
-            w: _toFiniteNumber(rawStatus.v) * _toFiniteNumber(rawStatus.i)
+            w: _toFiniteNumber(rawStatus.v) * _toFiniteNumber(rawStatus.i),
+            board_v: _toFiniteNumber(rawStatus.bv),  // Olimex on-board voltage (GPIO35)
+            ext_power: !!rawStatus.ep                 // External power detected (GPIO39)
         },
         ups: {
             // Firmware doesn't yet report battery state -- defaults until UPS
-            // telemetry is wired up. Source heuristic: PoE rail >30V => mains.
+            // telemetry is wired up. Source heuristic: ext_power flag from GPIO39.
             battery_pct: _toFiniteIntegerOrNull(rawStatus.batt),
-            source: _toFiniteNumber(rawStatus.v) > 30 ? 'dc' : 'battery'
+            source: rawStatus.ep ? 'dc' : 'battery'
         },
         sensor_ok: !!rawStatus.ok,
         lastSeen: new Date().toISOString(),

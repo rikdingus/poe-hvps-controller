@@ -28,9 +28,9 @@ const SNMP_COMMUNITY = process.env.SNMP_COMMUNITY || 'public';
 
 // OIDs for MikroTik NetPower 8P / RB5009
 const OIDS = {
-  voltage: '.1.3.6.1.4.1.14988.1.1.3.10.0',
-  temp:    '.1.3.6.1.4.1.14988.1.1.3.11.0',
-  cpu:     '.1.3.6.1.4.1.14988.1.1.3.14.0'
+  voltage: '1.3.6.1.4.1.14988.1.1.3.10.0',
+  temp:    '1.3.6.1.4.1.14988.1.1.3.11.0',
+  cpu:     '1.3.6.1.4.1.14988.1.1.3.14.0'
 };
 
 // MQTT Bridge Configuration
@@ -50,6 +50,7 @@ const CREDITS_CONFIG = '../config/ai_credits.json';
 
 let nodeCache      = {};
 let infraCache     = { voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: null };
+let poeCache       = {};  // per-port PoE telemetry from MikroTik
 let digitizerCache = {
   triggerRate: 0,
   coincidenceMode: '2-fold',
@@ -89,6 +90,43 @@ const pollInfra = () => {
   });
 };
 
+// MikroTik per-port PoE OID base (append .<port_index>)
+const POE_OID_VOLTAGE = '1.3.6.1.4.1.14988.1.1.15.1.1.4';  // decivolts
+const POE_OID_CURRENT = '1.3.6.1.4.1.14988.1.1.15.1.1.5';  // milliamps
+const POE_OID_POWER   = '1.3.6.1.4.1.14988.1.1.15.1.1.6';  // deciwatts
+
+const pollPoePorts = async () => {
+  try {
+    const rawNodes = await fs.readFile(NODES_CONFIG, 'utf-8');
+    const nodes = JSON.parse(rawNodes);
+    const ports = [...new Set(nodes.map(n => n.poe_port).filter(Boolean))];
+    if (ports.length === 0) return;
+
+    const oids = [];
+    for (const port of ports) {
+      oids.push(`${POE_OID_VOLTAGE}.${port}`);
+      oids.push(`${POE_OID_CURRENT}.${port}`);
+      oids.push(`${POE_OID_POWER}.${port}`);
+    }
+
+    session.get(oids, (error, varbinds) => {
+      if (error) return;  // silently skip — infra poll already logs SNMP errors
+      const newPoe = {};
+      for (let i = 0; i < ports.length; i++) {
+        const v = varbinds[i * 3];
+        const a = varbinds[i * 3 + 1];
+        const w = varbinds[i * 3 + 2];
+        newPoe[ports[i]] = {
+          voltage: (Number(v?.value) || 0) / 10,   // decivolts → V
+          current: (Number(a?.value) || 0),          // milliamps
+          power:   (Number(w?.value) || 0) / 10      // deciwatts → W
+        };
+      }
+      poeCache = newPoe;
+    });
+  } catch (_) { /* nodes.json read failure — ignore, next cycle will retry */ }
+};
+
 // Aggregator Loop (Korstmos Detectors)
 const pollDetectors = async () => {
   try {
@@ -123,6 +161,17 @@ const pollDetectors = async () => {
       }
       newCache[node.id] = mapped;
     }
+
+    // Inject per-port PoE telemetry from MikroTik into each node
+    for (const node of nodes) {
+      const cached = newCache[node.id];
+      if (cached && node.poe_port && poeCache[node.poe_port]) {
+        const poe = poeCache[node.poe_port];
+        cached.power.poe_v = poe.voltage;
+        cached.power.poe_ma = poe.current;
+        cached.power.poe_w = poe.power;
+      }
+    }
     nodeCache = newCache;
 
     // Simulate Digitizer Muon Logic
@@ -145,6 +194,7 @@ const pollDetectors = async () => {
 
 setInterval(pollDetectors, 2000);
 setInterval(pollInfra,     5000);
+setInterval(pollPoePorts,  5000);  // per-port PoE telemetry from switch
 
 // ---- Detector / digitizer / infra endpoints -------------------------
 app.get('/api/detectors', (req, res) => res.json(Object.values(nodeCache)));
