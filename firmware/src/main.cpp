@@ -6,6 +6,7 @@
 #include <INA226.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <driver/pcnt.h>
 
 // --- Firmware Info ---
 #define FW_VERSION "1.1.0"
@@ -15,6 +16,73 @@
 #define I2C_SCL 16
 #define ADC_HV1 32
 #define ADC_HV2 33
+#define PULSE_PIN_1 14
+#define PULSE_PIN_2 15
+
+// --- PCNT Pulse Tracking ---
+#define PCNT_H_LIM_VAL 10000
+volatile uint32_t pcnt0_overflows = 0;
+volatile uint32_t pcnt1_overflows = 0;
+
+static void IRAM_ATTR pcnt_intr_handler(void *arg) {
+    int unit = (int)arg;
+    if (unit == PCNT_UNIT_0) pcnt0_overflows++;
+    else if (unit == PCNT_UNIT_1) pcnt1_overflows++;
+}
+
+void initPCNT() {
+    pcnt_config_t pcnt_config_0 = {
+        .pulse_gpio_num = PULSE_PIN_1,
+        .ctrl_gpio_num = PCNT_PIN_NOT_USED,
+        .lctrl_mode = PCNT_MODE_KEEP,
+        .hctrl_mode = PCNT_MODE_KEEP,
+        .pos_mode = PCNT_COUNT_INC,
+        .neg_mode = PCNT_COUNT_DIS,
+        .counter_h_lim = PCNT_H_LIM_VAL,
+        .counter_l_lim = -1,
+        .unit = PCNT_UNIT_0,
+        .channel = PCNT_CHANNEL_0
+    };
+    pcnt_unit_config(&pcnt_config_0);
+    pcnt_filter_disable(PCNT_UNIT_0);
+
+    pcnt_config_t pcnt_config_1 = {
+        .pulse_gpio_num = PULSE_PIN_2,
+        .ctrl_gpio_num = PCNT_PIN_NOT_USED,
+        .lctrl_mode = PCNT_MODE_KEEP,
+        .hctrl_mode = PCNT_MODE_KEEP,
+        .pos_mode = PCNT_COUNT_INC,
+        .neg_mode = PCNT_COUNT_DIS,
+        .counter_h_lim = PCNT_H_LIM_VAL,
+        .counter_l_lim = -1,
+        .unit = PCNT_UNIT_1,
+        .channel = PCNT_CHANNEL_0
+    };
+    pcnt_unit_config(&pcnt_config_1);
+    pcnt_filter_disable(PCNT_UNIT_1);
+
+    pcnt_event_enable(PCNT_UNIT_0, PCNT_EVT_H_LIM);
+    pcnt_event_enable(PCNT_UNIT_1, PCNT_EVT_H_LIM);
+
+    pcnt_isr_service_install(0);
+    pcnt_isr_handler_add(PCNT_UNIT_0, pcnt_intr_handler, (void *)PCNT_UNIT_0);
+    pcnt_isr_handler_add(PCNT_UNIT_1, pcnt_intr_handler, (void *)PCNT_UNIT_1);
+
+    pcnt_counter_pause(PCNT_UNIT_0);
+    pcnt_counter_clear(PCNT_UNIT_0);
+    pcnt_counter_resume(PCNT_UNIT_0);
+    pcnt_counter_pause(PCNT_UNIT_1);
+    pcnt_counter_clear(PCNT_UNIT_1);
+    pcnt_counter_resume(PCNT_UNIT_1);
+}
+
+uint64_t getHits(pcnt_unit_t unit) {
+    int16_t count = 0;
+    pcnt_get_counter_value(unit, &count);
+    if (unit == PCNT_UNIT_0) return (uint64_t)pcnt0_overflows * PCNT_H_LIM_VAL + count;
+    else return (uint64_t)pcnt1_overflows * PCNT_H_LIM_VAL + count;
+}
+
 
 // --- HV Feedback Calibration ---
 // Adjust these after measuring with a known reference.
@@ -142,6 +210,8 @@ void setup() {
   Wire.begin(I2C_SDA, I2C_SCL);
   ETH.begin();
 
+  initPCNT();
+
   ina_ok = INA.begin();
   if (ina_ok) INA.setMaxCurrentShunt(2.0, 0.01);
 
@@ -179,6 +249,8 @@ void setup() {
     doc["hv1o"] = hv1_offset;
     doc["hv2g"] = hv2_gain;
     doc["hv2o"] = hv2_offset;
+    doc["h1"]  = getHits(PCNT_UNIT_0);
+    doc["h2"]  = getHits(PCNT_UNIT_1);
     String res;
     serializeJson(doc, res);
     auto *resp = req->beginResponse(200, "application/json", res);
@@ -229,6 +301,8 @@ void setup() {
     doc["mac"] = ETH.macAddress();
     doc["ip"] = ETH.localIP().toString();
     doc["uptime"] = uptime_seconds;
+    doc["h1"] = getHits(PCNT_UNIT_0);
+    doc["h2"] = getHits(PCNT_UNIT_1);
     String res;
     serializeJson(doc, res);
     auto *resp = req->beginResponse(200, "application/json", res);
