@@ -1,0 +1,39 @@
+# Normalize line endings across Windows/Linux/macOS.
+# Without this, files committed from one OS show up as fully modified on another.
+
+* text=auto eol=lf
+
+# Windows-native scripts must retain CRLF or PowerShell will choke on shebangs/etc.
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Shell / Node / Python / C++ / config / docs: LF.
+*.sh    text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.cpp   text eol=lf
+*.h     text eol=lf
+*.hpp   text eol=lf
+*.ini   text eol=lf
+*.toml  text eol=lf
+*.env   text eol=lf
+
+# Binary assets: never touch.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   text eol=lf
+*.pdf   binary
+*.zip   binary
+*.kicad_pcb  binary
+*.kicad_pro  binary
+*.kicad_sch  binary
