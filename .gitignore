@@ -15,6 +15,7 @@ objs/
 *.bin
 *.elf
 *.o
+firmware/src/secrets.h
 
 # OS
 .DS_Store

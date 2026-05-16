@@ -8,6 +8,7 @@
 #include <ESPmDNS.h>
 #include <driver/pcnt.h>
 #include <ArduinoOTA.h>
+#include "secrets.h"
 
 // --- Firmware Info ---
 #define FW_VERSION "1.1.0"
@@ -205,8 +206,13 @@ void onEthEvent(WiFiEvent_t event) {
     case ARDUINO_EVENT_ETH_GOT_IP:
       Serial.printf("[ETH] IP: %s\n", ETH.localIP().toString().c_str());
       eth_connected = true;
-      setupOTA();
-      ArduinoOTA.begin();
+      if (String(OTA_PASSWORD_HASH) != "") {
+        setupOTA();
+        ArduinoOTA.setPasswordHash(OTA_PASSWORD_HASH);
+        ArduinoOTA.begin();
+      } else {
+        Serial.println("[OTA] Disabled: OTA_PASSWORD_HASH is unset.");
+      }
       if (MDNS.begin("hvps")) {
         MDNS.addService("http", "tcp", 80);
       }
