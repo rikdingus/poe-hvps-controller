@@ -6,6 +6,9 @@
     "max_temp_c": 65
   },
   "channel_overrides": {
-    "HVPS-07": { "max_hv_volts": 1000, "note": "Sensitive experimental load" }
+    "HVPS-07": {
+      "max_hv_volts": 1000,
+      "note": "Sensitive experimental load"
+    }
   }
 }
