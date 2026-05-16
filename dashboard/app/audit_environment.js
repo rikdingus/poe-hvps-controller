@@ -16,7 +16,7 @@ async function checkPing() {
 async function checkSnmp() {
   return new Promise((resolve) => {
     const session = snmp.createSession(MIKROTIK_IP, SNMP_COMMUNITY);
-    const oid = '.1.3.6.1.2.1.1.1.0'; // sysDescr
+    const oid = '1.3.6.1.2.1.1.1.0'; // sysDescr
     session.get([oid], (error, varbinds) => {
       session.close();
       resolve(!error);

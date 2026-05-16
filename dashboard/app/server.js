@@ -28,9 +28,9 @@ const SNMP_COMMUNITY = process.env.SNMP_COMMUNITY || 'public';
 
 // OIDs for MikroTik NetPower 8P / RB5009
 const OIDS = {
-  voltage: '.1.3.6.1.4.1.14988.1.1.3.10.0',
-  temp:    '.1.3.6.1.4.1.14988.1.1.3.11.0',
-  cpu:     '.1.3.6.1.4.1.14988.1.1.3.14.0'
+  voltage: '1.3.6.1.4.1.14988.1.1.3.10.0',
+  temp:    '1.3.6.1.4.1.14988.1.1.3.11.0',
+  cpu:     '1.3.6.1.4.1.14988.1.1.3.14.0'
 };
 
 // MQTT Bridge Configuration
