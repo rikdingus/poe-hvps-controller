@@ -132,19 +132,19 @@ export default function NodeCard({ node }) {
           <div className="space-y-1">
             <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">PoE Input</p>
             <p className="text-lg font-black text-[#1d1d1b]">
-              {isOnline ? `${(power?.board_v || power?.v || 0).toFixed(1)}` : '--'} <span className="text-[10px]">V</span>
+              {isOnline ? `${(power?.poe_v || power?.board_v || power?.v || 0).toFixed(1)}` : '--'} <span className="text-[10px]">V</span>
             </p>
           </div>
           <div className="space-y-1 text-center">
             <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">PoE Current</p>
             <p className="text-lg font-black text-[#1d1d1b]">
-              {isOnline && node.sensor_ok ? `${(power?.a * 1000)?.toFixed(0) || '0'}` : '--'} <span className="text-[10px]">mA</span>
+              {isOnline && (power?.poe_ma != null || node.sensor_ok) ? `${power?.poe_ma ?? ((power?.a * 1000)?.toFixed(0) || '0')}` : '--'} <span className="text-[10px]">mA</span>
             </p>
           </div>
           <div className="space-y-1 text-right">
-            <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">Active Power</p>
+            <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">PoE Power</p>
             <p className="text-lg font-black text-[#1d1d1b]">
-              {isOnline && node.sensor_ok ? `${power?.w?.toFixed(1) || '0.0'}` : '--'} <span className="text-[10px]">W</span>
+              {isOnline && (power?.poe_w != null || node.sensor_ok) ? `${(power?.poe_w ?? power?.w ?? 0).toFixed(1)}` : '--'} <span className="text-[10px]">W</span>
             </p>
           </div>
         </div>
@@ -153,10 +153,10 @@ export default function NodeCard({ node }) {
         {isOnline && (
           <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
             <span className="text-[8px] uppercase font-black text-gray-400 tracking-widest">Feed Source</span>
-            {power?.ext_power ? (
+            {(power?.poe_v > 0 || power?.ext_power) ? (
               <span className="text-[9px] font-black text-emerald-600 flex items-center gap-2">
                 <Zap className="w-4 h-4" />
-                POE — {(power?.board_v || power?.v || 0).toFixed(1)}V
+                POE — {(power?.poe_v || power?.board_v || power?.v || 0).toFixed(1)}V
               </span>
             ) : (
               <span className="text-[9px] font-black text-amber-500 flex items-center gap-2">
