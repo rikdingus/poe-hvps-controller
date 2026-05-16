@@ -110,7 +110,10 @@ const pollPoePorts = async () => {
     }
 
     session.get(oids, (error, varbinds) => {
-      if (error) return;  // silently skip — infra poll already logs SNMP errors
+      if (error) {
+        console.warn(`[SNMP POE] Error polling ${oids}:`, error.message);
+        return;
+      }
       const newPoe = {};
       for (let i = 0; i < ports.length; i++) {
         const v = varbinds[i * 3];

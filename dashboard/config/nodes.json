@@ -1,3 +1,3 @@
 [
-  {"id": 1, "name": "HVPS-01", "ip": "192.168.1.221", "location": "Rack A"}
+  {"id": 1, "name": "HVPS-01", "ip": "192.168.1.221", "location": "Rack A", "poe_port": 6}
 ]
