@@ -4,7 +4,7 @@
     "name": "HVPS-01",
     "ip": "192.168.1.221",
     "location": "Rack A",
-    "poe_port": 2
+    "poe_port": 1
   },
   {
     "id": 2,
