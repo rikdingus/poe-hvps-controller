@@ -3,7 +3,9 @@
 //
 //  Run before first-light / each session start. Verifies:
 //    1. MikroTik reachability + SNMP read permission
-//    2. Each detector node in nodes.json: ping + firmware /info
+//    2. Each detector node in nodes.json: ping + firmware /info,
+//       including comparison of reported firmware version against
+//       EXPECTED_FW (default '1.1.0', override via env).
 //    3. logs/ directory exists and is writable
 //
 //  Usage:
@@ -14,7 +16,7 @@
 // =====================================================================
 
 import snmp from 'net-snmp';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -24,16 +26,26 @@ const SNMP_COMMUNITY = process.env.SNMP_COMMUNITY || 'public';
 const NODES_CONFIG   = process.env.NODES_CONFIG   || '../config/nodes.json';
 const LOGS_DIR       = process.env.LOGS_DIR       || './logs';
 const FETCH_TIMEOUT  = Number(process.env.FETCH_TIMEOUT_MS || 1500);
+const EXPECTED_FW    = process.env.EXPECTED_FW || '1.1.0';
 
 // Cross-platform single-shot ping. Returns true on reachable.
+// Validate that a host string is a sane IPv4 or hostname before we hand it
+// to a subprocess. Belt-and-braces alongside execFile (which already avoids
+// shell injection by not invoking /bin/sh).
+function _isSafeHost(s) {
+  if (typeof s !== 'string' || s.length === 0 || s.length > 253) return false;
+  // Accept IPv4 (loose) or hostname/FQDN. Reject anything with shell metachars.
+  return /^[A-Za-z0-9._-]+$/.test(s);
+}
+
 async function pingHost(host) {
+  if (!_isSafeHost(host)) return false;
   const isWin = os.platform() === 'win32';
-  // -n 1 on Windows, -c 1 elsewhere; -w/-W for timeout (ms vs s).
-  const cmd = isWin
-    ? `ping -n 1 -w 1500 ${host}`
-    : `ping -c 1 -W 2 ${host}`;
+  const args = isWin
+    ? ['-n', '1', '-w', '1500', host]
+    : ['-c', '1', '-W', '2', host];
   return new Promise((resolve) => {
-    exec(cmd, { timeout: 3000 }, (error) => resolve(!error));
+    execFile('ping', args, { timeout: 3000 }, (error) => resolve(!error));
   });
 }
 
@@ -126,7 +138,10 @@ async function audit() {
         const probe = await probeDetector(n);
         if (probe.ok) {
           const info = probe.info;
-          line += `fw=${info.fw || '?'} uptime=${info.uptime || '?'}s mac=${(info.mac || '').slice(-8)}`;
+          const fw = info.fw || '?';
+          const fwMatch = (fw === EXPECTED_FW);
+          line += `fw=${fw}${fwMatch ? '' : ` (EXPECTED ${EXPECTED_FW})`} uptime=${info.uptime || '?'}s mac=${(info.mac || '').slice(-8)}`;
+          if (!fwMatch) failures++;
         } else {
           line += `api=FAIL(${probe.reason})`;
           failures++;
