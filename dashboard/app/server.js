@@ -41,6 +41,16 @@ mqttClient.on('connect', () => {
   console.log(`Connected to Home Assistant MQTT Broker at ${MQTT_BROKER}`);
 });
 
+// Log MQTT failures without crashing the proxy. The HA bridge is optional;
+// detector telemetry and the safety guardian must keep running even if the
+// broker is unreachable.
+mqttClient.on('error', (err) => {
+  console.warn(`[MQTT] error: ${err && err.message ? err.message : err}`);
+});
+mqttClient.on('reconnect', () => {
+  console.log('[MQTT] reconnecting...');
+});
+
 app.use(cors());
 app.use(express.json());
 
@@ -82,9 +92,10 @@ const pollInfra = () => {
       infraCache.voltage = isNaN(infraCache.voltage) ? 0 : infraCache.voltage;
       mqttClient.publish('korstmos/infra/health', JSON.stringify(infraCache), { retain: true });
     } else {
-      console.warn(`[SNMP] Error polling ${MIKROTIK_IP}:`, error.message);
-      infraCache.error = error.message;
-      if (error.message.includes('Timeout')) createSnmpSession();
+      const msg = (error && error.message) || String(error);
+      console.warn(`[SNMP] Error polling ${MIKROTIK_IP}:`, msg);
+      infraCache.error = msg;
+      if (msg.includes('Timeout')) createSnmpSession();
     }
   });
 };
@@ -151,15 +162,49 @@ app.get('/api/detectors', (req, res) => res.json(Object.values(nodeCache)));
 app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
 app.get('/api/infra',      (req, res) => res.json(infraCache));
 
+// MikroTik PoE control OID. Values: 1=auto-on, 2=forced-on, 3=off.
+const POE_CONTROL_OID = '.1.3.6.1.4.1.14988.1.1.15.1.1.2';
+const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';
+
+// Set a single PoE port to a desired RouterOS state. Resolves on success,
+// rejects on SNMP error. Uses a short-lived session per call so a stuck
+// session can't poison subsequent reboots.
+function setPoeState(port, state) {
+  return new Promise((resolve, reject) => {
+    const s = snmp.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE, { timeout: 2000, retries: 1 });
+    const oid = `${POE_CONTROL_OID}.${port}`;
+    s.set([{ oid, type: snmp.ObjectType.Integer, value: state }], (err) => {
+      s.close();
+      err ? reject(err) : resolve();
+    });
+  });
+}
+
 app.post('/api/reboot-detector/:id', async (req, res) => {
-  const nodeId = req.params.id;
-  const nodes  = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
-  const target = nodes.find(n => n.id == nodeId);
-  if (target && target.poe_port) {
+  const nodeId = Number(req.params.id);
+  if (!Number.isFinite(nodeId)) return res.status(400).json({ error: 'invalid id' });
+
+  let nodes;
+  try {
+    nodes = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
+  } catch (e) {
+    return res.status(500).json({ error: `cannot read nodes config: ${e.message}` });
+  }
+
+  const target = nodes.find(n => n.id === nodeId);
+  if (!target) return res.status(404).json({ error: 'unknown detector id' });
+  if (!target.poe_port) return res.status(409).json({ error: 'detector has no poe_port mapping in nodes.json' });
+
+  // Off-on cycle: 3 = off, 1 = auto-on. Power down ~3s then back on.
+  try {
     console.log(`[KORSTMOS] Power cycling Detector ${nodeId} on port ${target.poe_port}`);
-    res.json({ status: 'success' });
-  } else {
-    res.status(404).json({ error: 'Not found' });
+    await setPoeState(target.poe_port, 3);
+    await new Promise(r => setTimeout(r, 3000));
+    await setPoeState(target.poe_port, 1);
+    res.json({ status: 'success', nodeId, poe_port: target.poe_port });
+  } catch (e) {
+    console.error(`[KORSTMOS] reboot failed for node ${nodeId}: ${e.message}`);
+    res.status(502).json({ error: `SNMP set failed: ${e.message}` });
   }
 });
 
