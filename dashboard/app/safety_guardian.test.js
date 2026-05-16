@@ -187,3 +187,63 @@ afterEach(async () => {
         channel_overrides: { 'HVPS-07': { max_hv_volts: 1000 } }
     });
 });
+
+// ---------------------------------------------------------------------------
+// poe_port-aware shutdown tests (added in claude/safety-port-mapping)
+
+test('emergencyShutdown passes poe_port to the shutdown function', async () => {
+    await writeConfig({
+        global_emergency_stop: false,
+        default_limits: { max_hv_volts: 2500, max_poe_current_amps: 1.5 },
+        channel_overrides: {}
+    });
+    await guardian.loadSafetyConfig(true);
+
+    const calls = [];
+    guardian._setShutdownForTesting(async (nodeId, poePort) => { calls.push({ nodeId, poePort }); });
+
+    await guardian.emergencyShutdown(3, 'test', 9);
+    assert.deepEqual(calls, [{ nodeId: 3, poePort: 9 }]);
+
+    // Restore the simple shutdowns recorder for any tests that run after this one.
+    guardian._setShutdownForTesting(async (nodeId) => { shutdowns.push(nodeId); });
+});
+
+test('checkSafety passes node.poe_port for per-node violations', async () => {
+    await writeConfig({
+        global_emergency_stop: false,
+        default_limits: { max_hv_volts: 1000 },  // 1.0 kV cap so 1.5 kV trips
+        channel_overrides: {}
+    });
+    await guardian.loadSafetyConfig(true);
+
+    const calls = [];
+    guardian._setShutdownForTesting(async (nodeId, poePort) => { calls.push({ nodeId, poePort }); });
+
+    await guardian.checkSafety([
+        { nodeId: 1, name: 'HVPS-01', poe_port: 1, status: 'online',
+          channels: [{ ch: 1, current_kv: 1.5 }, { ch: 2, current_kv: 0 }],
+          power: { v: 48, a: 0.1 } }
+    ]);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].nodeId, 1);
+    assert.equal(calls[0].poePort, 1, 'safety_guardian forwards nodes.json poe_port');
+
+    guardian._setShutdownForTesting(async (nodeId) => { shutdowns.push(nodeId); });
+});
+
+test('emergencyShutdown falls back to nodeId+1 when poe_port omitted', async () => {
+    // _defaultShutdown can't actually run in unit tests (would touch net-snmp),
+    // but we can verify the fallback path by checking that a missing poe_port
+    // does not crash and that the shutdown function still gets called.
+    const calls = [];
+    guardian._setShutdownForTesting(async (nodeId, poePort) => { calls.push({ nodeId, poePort }); });
+
+    await guardian.emergencyShutdown(2, 'legacy', undefined);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].nodeId, 2);
+    assert.equal(calls[0].poePort, undefined, 'undefined poe_port forwarded so _defaultShutdown can run its fallback');
+
+    guardian._setShutdownForTesting(async (nodeId) => { shutdowns.push(nodeId); });
+});

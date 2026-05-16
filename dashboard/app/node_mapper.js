@@ -46,6 +46,9 @@ export function buildOfflineNode(nodeConfig, status = 'offline', errorMsg = null
     return {
         nodeId: nodeConfig.id,
         name: nodeConfig.name || `Detector-${String(nodeConfig.id).padStart(2, '0')}`,
+        // poe_port preserved end-to-end so the safety guardian and reboot
+        // endpoint cut the SAME port. Null when nodes.json has no mapping.
+        poe_port: (typeof nodeConfig.poe_port === 'number') ? nodeConfig.poe_port : null,
         status,
         channels: [],
         power: { v: 0, a: 0, w: 0 },
@@ -111,6 +114,8 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
     return {
         nodeId: nodeConfig.id,
         name: nodeConfig.name || `Detector-${String(nodeConfig.id).padStart(2, '0')}`,
+        // poe_port preserved end-to-end (see buildOfflineNode comment).
+        poe_port: (typeof nodeConfig.poe_port === 'number') ? nodeConfig.poe_port : null,
         status: 'online',
         channels: [
             buildChannel(1, 'hv1', 'p1', 'c1'),
