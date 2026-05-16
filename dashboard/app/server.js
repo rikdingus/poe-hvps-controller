@@ -200,7 +200,7 @@ app.post('/api/emergency-stop', async (req, res) => {
 // ---- Static / SPA ---------------------------------------------------
 const __dirname = path.resolve();
 app.use(express.static(path.join(__dirname, 'dist')));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
+// Wildcard route removed for Express 5 compatibility (preview mode)
 
 app.listen(PORT, () => {
   console.log(`Project Korstmos Master Controller running on port ${PORT}`);
