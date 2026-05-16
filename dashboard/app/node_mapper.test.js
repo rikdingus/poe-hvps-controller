@@ -140,3 +140,32 @@ test('online and offline shapes have IDENTICAL keys (frontend can rely on this)'
     assert.deepEqual(Object.keys(online.power).sort(), Object.keys(offline.power).sort());
     assert.deepEqual(Object.keys(online.ups).sort(),   Object.keys(offline.ups).sort());
 });
+
+// ---------------------------------------------------------------------------
+test('mapStatusToNode preserves poe_port from nodeConfig', () => {
+    const raw = { v: 48.2, i: 0.12, hv1: 0.1, hv2: 0.1, p1: 50, p2: 50, c1: 50, c2: 50, ok: true };
+    const cfgWithPort = { ...NODE_CFG, poe_port: 7 };
+    const node = mapStatusToNode(raw, cfgWithPort, LIMITS);
+    assert.equal(node.poe_port, 7, 'poe_port flows through online path');
+
+    const cfgNoPort = { ...NODE_CFG };  // no poe_port
+    const node2 = mapStatusToNode(raw, cfgNoPort, LIMITS);
+    assert.equal(node2.poe_port, null, 'poe_port is null when nodeConfig omits it');
+});
+
+test('buildOfflineNode preserves poe_port from nodeConfig', () => {
+    const cfgWithPort = { ...NODE_CFG, poe_port: 4 };
+    const node = buildOfflineNode(cfgWithPort, 'offline', 'timeout');
+    assert.equal(node.poe_port, 4);
+    assert.equal(node.status, 'offline');
+
+    const cfgNoPort = { ...NODE_CFG };
+    assert.equal(buildOfflineNode(cfgNoPort).poe_port, null);
+});
+
+test('mapStatusToNode rejects non-numeric poe_port', () => {
+    const raw = { v: 48.2, i: 0.12, hv1: 0.1, hv2: 0.1, p1: 0, p2: 0, c1: 0, c2: 0, ok: true };
+    const cfgBadPort = { ...NODE_CFG, poe_port: '7' };  // string, not number
+    const node = mapStatusToNode(raw, cfgBadPort, LIMITS);
+    assert.equal(node.poe_port, null, 'string poe_port is rejected as non-numeric');
+});

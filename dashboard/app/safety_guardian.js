@@ -90,7 +90,7 @@ export async function setGlobalEmergencyStop(value, reason = 'manual') {
 }
 
 // --- SNMP-driven PoE shutdown (lazily init, overridable for tests) --
-async function _defaultShutdown(nodeId) {
+async function _defaultShutdown(nodeId, poePort) {
     // Lazy-import net-snmp so that test code that never calls this path
     // doesn't need the native binding.
     if (!_snmpModule) {
@@ -99,8 +99,14 @@ async function _defaultShutdown(nodeId) {
     if (!_snmpSession) {
         _snmpSession = _snmpModule.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE);
     }
-    // Mapping: detector node N -> MikroTik PoE port N+1.
-    const portIndex = nodeId + 1;
+    // Prefer the caller-supplied poe_port (carried end-to-end from nodes.json).
+    // Fall back to the legacy nodeId+1 mapping for callers that haven't been
+    // migrated. Logged loudly so the legacy path is auditable.
+    let portIndex = poePort;
+    if (!Number.isFinite(portIndex)) {
+        portIndex = nodeId + 1;
+        console.warn(`[GUARDIAN] no poe_port supplied for node ${nodeId}; falling back to legacy port ${portIndex}`);
+    }
     const oid = `${POE_CONTROL_OID}.${portIndex}`;
     return new Promise((resolve, reject) => {
         _snmpSession.set(
@@ -113,16 +119,16 @@ async function _defaultShutdown(nodeId) {
 /** Test hook: pass a function `(nodeId) => Promise<void>` to bypass SNMP. */
 export function _setShutdownForTesting(fn) { _shutdownFn = fn; }
 
-export async function emergencyShutdown(nodeId, reason = 'unspecified') {
-    console.error(`[GUARDIAN] EMERGENCY SHUTDOWN node=${nodeId} reason="${reason}"`);
+export async function emergencyShutdown(nodeId, reason = 'unspecified', poePort = undefined) {
+    console.error(`[GUARDIAN] EMERGENCY SHUTDOWN node=${nodeId} port=${poePort ?? '(legacy)'} reason="${reason}"`);
     const fn = _shutdownFn || _defaultShutdown;
     try {
-        await fn(nodeId);
+        await fn(nodeId, poePort);
         console.log(`[GUARDIAN] Power cut OK for node ${nodeId}`);
-        return { ok: true, nodeId, reason };
+        return { ok: true, nodeId, poePort, reason };
     } catch (e) {
         console.error(`[GUARDIAN] FAILED to cut power node=${nodeId}: ${e.message}`);
-        return { ok: false, nodeId, reason, error: e.message };
+        return { ok: false, nodeId, poePort, reason, error: e.message };
     }
 }
 
@@ -135,7 +141,7 @@ export async function checkSafety(nodeData) {
         const online = (nodeData || []).filter(n => n && n.status === 'online');
         if (online.length > 0) {
             console.warn(`[GUARDIAN] global_emergency_stop active; shutting down ${online.length} detector(s).`);
-            await Promise.all(online.map(n => emergencyShutdown(n.nodeId, 'global_emergency_stop')));
+            await Promise.all(online.map(n => emergencyShutdown(n.nodeId, 'global_emergency_stop', n.poe_port)));
         }
         return { violations: online.map(n => ({ nodeId: n.nodeId, reason: 'global_emergency_stop' })) };
     }
@@ -154,14 +160,14 @@ export async function checkSafety(nodeData) {
             const kv = Number(ch && ch.current_kv);
             if (Number.isFinite(kv) && kv > maxKv) {
                 violations.push({ nodeId: node.nodeId, channel: ch.ch, kind: 'overvoltage', kv, maxKv });
-                await emergencyShutdown(node.nodeId, `ch${ch.ch} ${kv.toFixed(3)}kV > ${maxKv}kV limit`);
+                await emergencyShutdown(node.nodeId, `ch${ch.ch} ${kv.toFixed(3)}kV > ${maxKv}kV limit`, node.poe_port);
             }
         }
 
         const a = Number(node.power && node.power.a);
         if (Number.isFinite(a) && limits.max_poe_current_amps != null && a > limits.max_poe_current_amps) {
             violations.push({ nodeId: node.nodeId, kind: 'overcurrent', a, maxA: limits.max_poe_current_amps });
-            await emergencyShutdown(node.nodeId, `${a.toFixed(3)}A > ${limits.max_poe_current_amps}A limit`);
+            await emergencyShutdown(node.nodeId, `${a.toFixed(3)}A > ${limits.max_poe_current_amps}A limit`, node.poe_port);
         }
     }
 
