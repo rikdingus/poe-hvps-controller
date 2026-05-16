@@ -8,7 +8,14 @@
 #include <ESPmDNS.h>
 #include <driver/pcnt.h>
 #include <ArduinoOTA.h>
-#include "secrets.h"
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  // No secrets.h on this build -- OTA will be disabled. Copy
+  // firmware/src/secrets.h.example to firmware/src/secrets.h and set
+  // OTA_PASSWORD_HASH to a non-empty SHA-256 hash to enable OTA flashing.
+  #define OTA_PASSWORD_HASH ""
+#endif
 
 // --- Firmware Info ---
 #define FW_VERSION "1.1.0"

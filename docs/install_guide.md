@@ -10,10 +10,20 @@ This guide covers the end-to-end setup of the PoE HVPS Controller ecosystem.
 
 ## 🚀 Step 1: Firmware Deployment
 1. Open the `/firmware` folder in VS Code with PlatformIO.
-2. Connect the Olimex board via USB.
-3. Edit `src/main.cpp` calibration constants if needed.
-4. Click **PlatformIO: Upload** (arrow icon).
-5. Open the **Serial Monitor** (plug icon) to verify the IP address and I2C scan.
+2. **Set up OTA credentials.** Copy `src/secrets.h.example` to `src/secrets.h`,
+   then either:
+   - Leave `OTA_PASSWORD_HASH` empty to **disable OTA** (USB-only flashing — safest default), or
+   - Set it to the SHA-256 hash of your chosen OTA password.
+     Generate with: `echo -n "your-password" | sha256sum` (Linux/macOS) or
+     `Get-FileHash -Algorithm SHA256 (New-TemporaryFile | Set-Content "your-password" -PassThru).FullName`
+     (PowerShell — or just use an online SHA-256 tool).
+   `secrets.h` is `.gitignore`d so your hash never leaves your machine.
+3. Connect the Olimex board via USB.
+4. Edit `src/main.cpp` calibration constants if needed.
+5. Click **PlatformIO: Upload** (arrow icon).
+6. Open the **Serial Monitor** (plug icon) to verify the IP address and I2C scan.
+   You should see either `[OTA] Disabled: OTA_PASSWORD_HASH is unset.` or
+   `[OTA] Started` depending on what you set in step 2.
 
 ## 📊 Step 2: Dashboard Setup
 The dashboard runs as a dockerized stack containing the React frontend and Node.js proxy.
