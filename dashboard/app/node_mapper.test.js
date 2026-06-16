@@ -35,7 +35,7 @@ test('mapStatusToNode produces canonical shape with both channels', () => {
     assert.equal(node.channels[1].target_pot, 200);
     assert.equal(node.channels[1].limit_kv, 2.5);
 
-    assert.deepEqual(node.power, { v: 48.2, a: 0.12, w: 48.2 * 0.12 });
+    assert.deepEqual(node.power, { v: 48.2, a: 0.12, w: 48.2 * 0.12, board_v: 0, ext_power: false });
     assert.equal(node.ups.source, 'dc', 'PoE rail >30V -> dc source');
     assert.equal(node.error, null);
 });
@@ -118,7 +118,7 @@ test('buildOfflineNode produces canonical shape with empty channels (no crash do
     assert.equal(node.name, 'HVPS-01');
     assert.equal(node.status, 'offline');
     assert.deepEqual(node.channels, [], 'empty array, NOT undefined -- safety_guardian relies on Array.isArray');
-    assert.deepEqual(node.power, { v: 0, a: 0, w: 0 });
+    assert.deepEqual(node.power, { v: 0, a: 0, w: 0, board_v: 0, ext_power: false });
     assert.equal(node.ups.battery_pct, null);
     assert.equal(node.ups.source, 'unknown');
     assert.equal(node.sensor_ok, false);

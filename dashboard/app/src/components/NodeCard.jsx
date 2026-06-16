@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Zap, BatteryMedium, Plug, Cpu } from 'lucide-react';
+import { AlertTriangle, Zap, BatteryMedium, Plug, Cpu, Activity } from 'lucide-react';
 
 // ─── StatusBadge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -62,6 +62,12 @@ function ChannelRow({ ch }) {
 
       <div className="flex justify-between mt-0.5">
         <span className="text-[7px] text-gray-300 font-bold">0</span>
+        {ch.hz !== undefined && (
+          <span className="text-[7px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+            <Activity className={`w-2.5 h-2.5 text-emerald-500 ${ch.hz > 0 ? 'animate-pulse' : ''}`} />
+            {ch.hz.toFixed(2)} Hz · {ch.hits.toLocaleString()} hits
+          </span>
+        )}
         <span className="text-[7px] text-gray-300 font-bold">{limitKv.toFixed(1)} kV max</span>
       </div>
     </div>
@@ -166,6 +172,36 @@ export default function NodeCard({ node }) {
             )}
           </div>
         )}
+
+        {/* Actions */}
+        <div className="mt-6 pt-6 border-t border-gray-100 flex justify-end">
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Are you sure you want to hard reboot ${name || `Node ${node.nodeId}`}? This will power-cycle the PoE port.`)) {
+                return;
+              }
+              const btn = document.getElementById(`reboot-btn-${node.nodeId}`);
+              if (btn) btn.disabled = true;
+              try {
+                const res = await fetch(`/api/reboot-detector/${node.nodeId}`, { method: 'POST' });
+                if (res.ok) {
+                  alert(`Reboot command sent successfully for ${name || `Node ${node.nodeId}`}.`);
+                } else {
+                  const err = await res.json();
+                  alert(`Failed to reboot: ${err.error || res.statusText}`);
+                }
+              } catch (e) {
+                alert(`Network error: ${e.message}`);
+              } finally {
+                if (btn) btn.disabled = false;
+              }
+            }}
+            id={`reboot-btn-${node.nodeId}`}
+            className="text-[9px] uppercase font-black tracking-widest text-[#be2c2e] hover:text-white hover:bg-[#be2c2e] border border-[#be2c2e]/20 hover:border-[#be2c2e] px-4 py-2 transition-all disabled:opacity-50"
+          >
+            Hard Reboot ↺
+          </button>
+        </div>
       </div>
     </div>
   );

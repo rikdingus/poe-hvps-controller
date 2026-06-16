@@ -16,10 +16,12 @@ const TMP = await fs.mkdtemp(path.join(os.tmpdir(), 'guardian-'));
 const CFG = path.join(TMP, 'safety_limits.json');
 process.env.SAFETY_CONFIG = CFG;
 
+let testMtime = Date.now();
 async function writeConfig(obj) {
     await fs.writeFile(CFG, JSON.stringify(obj, null, 2) + '\n');
-    // Bump mtime by a clear amount so the loader sees the change even on coarse FS.
-    const future = new Date(Date.now() + 50);
+    // Bump mtime monotonically by 1000ms each time to prevent Windows clock resolution overlap (15.6ms)
+    testMtime += 1000;
+    const future = new Date(testMtime);
     await fs.utimes(CFG, future, future);
 }
 
