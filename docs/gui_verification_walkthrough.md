@@ -60,8 +60,11 @@ With the integration of `DEMO_MODE=true`, we verified how the dashboard behaves 
 - **HVPS-07 Safety Violation:**
   - Channel 1 `current_kv` sits above its `limit_kv` (1.0 kV).
   - **Visual Indicator**: The progress bar correctly turns from green (`bg-emerald-500`) to warning amber (`bg-amber-500`), and the target arrow turns amber (`text-amber-500`).
-  - > [!WARNING]
-    > **A11y Gap / Accessibility Improvement:** The warning relies entirely on color changes (green to amber). There is no global red warning banner or text alert ("Safety Violation"), and the node card border remains gray. This may be difficult for color-blind users or operators to notice quickly. We recommend adding a text-based "LIMIT EXCEEDED" badge and highlights on the card border.
+  - > [!IMPORTANT]
+    > **Accessibility (A11y) Resolution:** We implemented explicit safety warnings in `NodeCard.jsx`. When a channel exceeds its safety limit, the dashboard:
+    > 1. Displays a bold, pulsing red badge **[LIMIT EXCEEDED]** in the card header.
+    > 2. Highlights the entire card border and institutional ribbon in warning red.
+    > 3. Colors the offending channel's voltage text red and appends a flashing **[Over Limit]** label.
 
 ---
 
