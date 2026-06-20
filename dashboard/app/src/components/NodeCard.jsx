@@ -24,27 +24,36 @@ function ChannelRow({ ch }) {
   const targetKv  = ch.target_kv  ?? 0;
   const limitKv   = ch.limit_kv   ?? 2.5;
 
-  const pct       = Math.min(100, Math.max(0, (currentKv / limitKv) * 100));
+  const rawPct    = (currentKv / limitKv) * 100;
+  const pct       = Math.min(100, Math.max(0, rawPct));
   const isRamping = Math.abs(currentKv - targetKv) > 0.01; 
 
-  const barColor  = pct > 100 ? 'bg-[#be2c2e]' : pct > 80 ? 'bg-amber-500' : 'bg-emerald-500';
+  const isExceeded = currentKv > limitKv;
+  const barColor  = isExceeded ? 'bg-[#be2c2e]' : pct > 80 ? 'bg-amber-500' : 'bg-emerald-500';
 
   return (
     <div className="mb-4">
       <div className="flex justify-between items-end mb-1.5">
         <div className="flex flex-col">
-          <span className="text-[8px] uppercase font-black text-gray-400 tracking-widest">
-            CH{ch.ch} HV
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] uppercase font-black text-gray-400 tracking-widest">
+              CH{ch.ch} HV
+            </span>
+            {isExceeded && (
+              <span className="text-[7px] font-black text-[#be2c2e] uppercase tracking-wider animate-pulse">
+                [Over Limit]
+              </span>
+            )}
+          </div>
           <span className="text-[7px] text-gray-300 font-bold uppercase tracking-widest">
              {targetKv > 0 ? `Target: ${targetKv.toFixed(3)} kV` : 'No Target'}
           </span>
         </div>
         <div className="flex items-baseline gap-1.5">
-          <span className="text-2xl font-black text-[#1d1d1b] leading-none">
+          <span className={`text-2xl font-black leading-none ${isExceeded ? 'text-[#be2c2e]' : 'text-[#1d1d1b]'}`}>
             {currentKv.toFixed(3)}
           </span>
-          <span className="text-[9px] font-bold text-gray-400">kV</span>
+          <span className={`text-[9px] font-bold ${isExceeded ? 'text-[#be2c2e]' : 'text-gray-400'}`}>kV</span>
           {isRamping && (
             <span className="text-[8px] font-black text-amber-500 uppercase ml-1 animate-pulse">
               → {targetKv.toFixed(3)}
@@ -86,7 +95,9 @@ export default function NodeCard({ node }) {
   const { name, status = 'offline', channels = [], power, ups, alert } = node;
   const isOnline = status === 'online';
 
-  const borderClass = alert || (status === 'error')
+  const isLimitExceeded = channels.some(ch => (ch.current_kv ?? 0) > (ch.limit_kv ?? 2.5));
+
+  const borderClass = alert || (status === 'error') || isLimitExceeded
     ? 'border-[#be2c2e] ring-4 ring-[#be2c2e]/10 shadow-2xl'
     : isOnline
       ? 'border-[#e5e5e5] shadow-sm'
@@ -95,7 +106,7 @@ export default function NodeCard({ node }) {
   return (
     <div className={`relative bg-white border ${borderClass} transition-all duration-500 overflow-hidden`}>
       {/* Institutional Ribbon */}
-      <div className={`h-1.5 w-full ${isOnline ? (alert ? 'bg-[#be2c2e]' : 'bg-[#1d1d1b]') : 'bg-gray-200'}`} />
+      <div className={`h-1.5 w-full ${isOnline ? ((alert || isLimitExceeded) ? 'bg-[#be2c2e]' : 'bg-[#1d1d1b]') : 'bg-gray-200'}`} />
 
       <div className="p-8">
         {/* Header */}
@@ -113,7 +124,12 @@ export default function NodeCard({ node }) {
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={status} />
-            {alert && <AlertTriangle className="w-4 h-4 text-[#be2c2e] animate-bounce" />}
+            {(alert || isLimitExceeded) && (
+              <span className="flex items-center gap-1 bg-[#be2c2e]/10 text-[#be2c2e] px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider animate-pulse">
+                <AlertTriangle className="w-3 h-3 text-[#be2c2e]" />
+                {isLimitExceeded ? 'Limit Exceeded' : 'Halted'}
+              </span>
+            )}
           </div>
         </div>
 
