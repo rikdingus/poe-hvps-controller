@@ -121,8 +121,8 @@ export default function NodeCard({ node }) {
         <div className="space-y-2">
           {channels.length > 0
             ? channels.map(ch => <ChannelRow key={ch.ch} ch={ch} />)
-            : <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-100">
-                 <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">No Channel Telemetry</span>
+            : <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-200">
+                 <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">No Channel Telemetry</span>
               </div>
           }
         </div>
@@ -130,19 +130,19 @@ export default function NodeCard({ node }) {
         {/* Secondary Metrics */}
         <div className="grid grid-cols-3 gap-4 mt-8 pt-8 border-t border-gray-100">
           <div className="space-y-1">
-            <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">PoE Input</p>
+            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">PoE Input</p>
             <p className="text-lg font-black text-[#1d1d1b]">
               {isOnline ? `${(power?.poe_v || power?.board_v || power?.v || 0).toFixed(1)}` : '--'} <span className="text-[10px]">V</span>
             </p>
           </div>
           <div className="space-y-1 text-center">
-            <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">PoE Current</p>
+            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">PoE Current</p>
             <p className="text-lg font-black text-[#1d1d1b]">
               {isOnline && (power?.poe_ma != null || node.sensor_ok) ? `${power?.poe_ma ?? ((power?.a * 1000)?.toFixed(0) || '0')}` : '--'} <span className="text-[10px]">mA</span>
             </p>
           </div>
           <div className="space-y-1 text-right">
-            <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest">PoE Power</p>
+            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">PoE Power</p>
             <p className="text-lg font-black text-[#1d1d1b]">
               {isOnline && (power?.poe_w != null || node.sensor_ok) ? `${(power?.poe_w ?? power?.w ?? 0).toFixed(1)}` : '--'} <span className="text-[10px]">W</span>
             </p>
@@ -150,7 +150,7 @@ export default function NodeCard({ node }) {
         </div>
 
         {/* UPS / power source */}
-        {ups && (
+        {isOnline && ups && (
           <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
             <span className="text-[8px] uppercase font-black text-gray-400 tracking-widest">Feed Source</span>
             {(power?.poe_v > 0 || power?.ext_power) ? (
