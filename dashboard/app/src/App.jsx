@@ -16,21 +16,21 @@ const DigitizerWidget = ({ data }) => {
       <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Trigger Rate</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Trigger Rate</span>
             <span className="text-4xl font-black text-[#1d1d1b]">{data.triggerRate} <span className="text-sm">Hz</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Coincidence</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Coincidence</span>
             <span className="text-xl font-black text-[#be2c2e] uppercase">{data.coincidenceMode}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-[#fafafa] p-4 border border-gray-100">
-            <span className="text-[8px] uppercase text-gray-400 font-black block mb-1">Active Plates</span>
+            <span className="text-[8px] uppercase text-gray-600 font-black block mb-1">Active Plates</span>
             <span className="text-lg font-black text-[#1d1d1b]">{data.activeChannels}</span>
           </div>
           <div className="bg-[#fafafa] p-4 border border-gray-100 text-right">
-            <span className="text-[8px] uppercase text-gray-400 font-black block mb-1">Muon Pulse</span>
+            <span className="text-[8px] uppercase text-gray-600 font-black block mb-1">Muon Pulse</span>
             <div className="flex items-center justify-end gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
               <span className="text-lg font-black text-[#1d1d1b]">LIVE</span>
@@ -44,22 +44,29 @@ const DigitizerWidget = ({ data }) => {
 
 const InfraWidget = ({ data }) => {
   if (!data) return null;
+  const isOffline = !data.lastSeen;
   return (
     <div className="bg-white border border-[#e5e5e5] p-8 mb-8">
-      <h3 className="text-[10px] uppercase text-[#be2c2e] mb-6 flex items-center gap-2 font-black tracking-widest">
+      <h3 className="text-[10px] uppercase text-[#be2c2e] mb-6 flex items-center gap-2 font-black tracking-widest w-full">
         <Settings className="w-3 h-3" /> Facility Infrastructure
+        {isOffline && <span className="text-[8px] text-[#be2c2e] font-black uppercase ml-auto border border-[#be2c2e]/20 px-1.5 py-0.5 animate-pulse">Offline</span>}
       </h3>
       <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Bus Voltage</span>
-            <span className="text-3xl font-black text-[#be2c2e]">{data.voltage.toFixed(1)} <span className="text-sm">V</span></span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Bus Voltage</span>
+            <span className="text-3xl font-black text-[#be2c2e]">{isOffline ? '--' : `${(data.voltage ?? 0).toFixed(1)}`} <span className="text-sm">V</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Lab Temp</span>
-            <span className="text-3xl font-black text-[#1d1d1b]">{data.temp.toFixed(1)}°C</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Lab Temp</span>
+            <span className="text-3xl font-black text-[#1d1d1b]">{isOffline ? '--' : `${(data.temp ?? 0).toFixed(1)}°C`}</span>
           </div>
         </div>
+        {isOffline && data.error && (
+          <div className="bg-red-50/50 border border-[#be2c2e]/10 p-2 mt-2">
+            <p className="text-[8px] text-[#be2c2e] font-black uppercase tracking-wider leading-tight">{data.error}</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -71,7 +78,7 @@ export default function App() {
   const [detectors,         setDetectors]         = useState([]);
   const [digitizer,         setDigitizer]         = useState({ triggerRate: 0, coincidenceMode: '2-fold', activeChannels: 4 });
   const [history,           setHistory]           = useState([]);
-  const [infra,             setInfra]             = useState({ voltage: 26.4, temp: 42, cpu: 12 });
+  const [infra,             setInfra]             = useState({ voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: 'Connecting...' });
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false);
   const [eStopPending,      setEStopPending]      = useState(false);
   const [view,              setView]              = useState('dashboard');
@@ -123,7 +130,7 @@ export default function App() {
       const liveInfra = await infraRes.json();
 
       setDigitizer(liveDig);
-      if (liveInfra.lastSeen) setInfra(liveInfra);
+      setInfra(liveInfra);
 
       if (liveDets && liveDets.length > 0) {
         setDetectors(liveDets);
@@ -172,14 +179,14 @@ export default function App() {
               <h1 className="text-4xl font-black tracking-tighter uppercase leading-none text-[#be2c2e]">
                 Project <span className="text-[#1d1d1b]">Korstmos</span>
               </h1>
-              <p className="text-[10px] uppercase tracking-[0.4em] font-bold mt-2 text-gray-400">
+              <p className="text-[10px] uppercase tracking-[0.4em] font-bold mt-2 text-gray-600">
                 Kosmisch Onderzoek Radboud Studenten Meetopstelling
               </p>
             </div>
           </div>
           <div className="flex gap-6 items-center">
             <div className="text-right">
-              <p className="text-[9px] uppercase font-black text-gray-400 tracking-widest">Array Status</p>
+              <p className="text-[9px] uppercase font-black text-gray-600 tracking-widest">Array Status</p>
               <p className="text-sm font-bold flex items-center gap-2 justify-end">
                 {isEmergencyStopped ? (
                   <><span className="w-2 h-2 rounded-full bg-[#be2c2e]"></span> Halted</>
@@ -247,8 +254,8 @@ export default function App() {
             <h3 className="text-[11px] uppercase text-[#be2c2e] mb-8 font-black tracking-widest flex items-center gap-3">
               Trigger Rate (Hz)
             </h3>
-            <div className="h-[150px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[150px]" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <AreaChart data={history}>
                   <Area
                     type="monotone"

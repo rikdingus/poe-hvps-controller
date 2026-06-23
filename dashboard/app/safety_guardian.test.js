@@ -179,6 +179,150 @@ test('hot-reload picks up edits to safety_limits.json', async () => {
 });
 
 // ---------------------------------------------------------------------------
+test('parseSwosResponse parses various formats of SwOS responses', () => {
+    const r1 = '{poe:[0x02,0x02,0x00],volt:[240,240,0]}';
+    const parsed1 = guardian.parseSwosResponse(r1);
+    assert.deepEqual(parsed1, { poe: [2, 2, 0], volt: [240, 240, 0] });
+
+    const r2 = '{"i01":[2,1],"i06":[238,239]}';
+    const parsed2 = guardian.parseSwosResponse(r2);
+    assert.deepEqual(parsed2, { i01: [2, 1], i06: [238, 239] });
+
+    const r3 = '{poe:[0x02,0x02,0x00],volt:[240,240,0],}';
+    const parsed3 = guardian.parseSwosResponse(r3);
+    assert.deepEqual(parsed3, { poe: [2, 2, 0], volt: [240, 240, 0] });
+});
+
+// ---------------------------------------------------------------------------
+test('getPoePortForNode resolves poe_port from nodes.json config', async () => {
+    const nodesJson = path.join(TMP, 'nodes.json');
+    process.env.NODES_CONFIG = nodesJson;
+    await fs.writeFile(nodesJson, JSON.stringify([
+        { id: 1, name: 'HVPS-01', poe_port: 8 },
+        { id: 2, name: 'HVPS-02' }
+    ]) + '\n');
+
+    const port1 = await guardian.getPoePortForNode(1);
+    assert.equal(port1, 8, 'should read poe_port from nodes.json');
+
+    const port2 = await guardian.getPoePortForNode(2);
+    assert.equal(port2, 3, 'should fallback to nodeId + 1 if poe_port is missing');
+});
+
+// ---------------------------------------------------------------------------
+test('fetchWithDigest executes HTTP Digest authentication handshake and parses response', async () => {
+    const http = await import('http');
+    let requests = [];
+    const server = http.createServer((req, res) => {
+        requests.push({
+            method: req.method,
+            url: req.url,
+            headers: req.headers
+        });
+        
+        const auth = req.headers.authorization;
+        if (!auth) {
+            res.writeHead(401, {
+                'WWW-Authenticate': 'Digest realm="MikroTik", nonce="mocknonce123", qop="auth"'
+            });
+            res.end('Unauthorized');
+        } else {
+            if (auth.includes('username="admin"') && auth.includes('nonce="mocknonce123"')) {
+                res.writeHead(200, { 'Content-Type': 'application/x-javascript' });
+                res.end('{poe:[0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02]}');
+            } else {
+                res.writeHead(403);
+                res.end('Forbidden');
+            }
+        }
+    });
+
+    const port = await new Promise((resolve) => {
+        server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+    });
+
+    try {
+        process.env.MIKROTIK_IP = `127.0.0.1:${port}`;
+        process.env.MIKROTIK_USERNAME = 'admin';
+        process.env.MIKROTIK_PASSWORD = 'password';
+
+        const res = await guardian.fetchWithDigest(`http://127.0.0.1:${port}/poe.b`);
+        assert.equal(res.status, 200);
+        const text = await res.text();
+        const data = guardian.parseSwosResponse(text);
+        assert.deepEqual(data.poe, [2, 2, 2, 2, 2, 2, 2, 2]);
+
+        assert.equal(requests.length, 2);
+        assert.equal(requests[0].headers.authorization, undefined);
+        assert.ok(requests[1].headers.authorization.includes('username="admin"'));
+    } finally {
+        server.close();
+    }
+});
+
+// ---------------------------------------------------------------------------
+test('swos-http PoE shutdown updates port to 0 and posts to switch', async () => {
+    const http = await import('http');
+    let requests = [];
+    const server = http.createServer((req, res) => {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            requests.push({
+                method: req.method,
+                url: req.url,
+                headers: req.headers,
+                body
+            });
+            
+            const auth = req.headers.authorization;
+            if (!auth) {
+                res.writeHead(401, {
+                    'WWW-Authenticate': 'Digest realm="MikroTik", nonce="mocknonce123", qop="auth"'
+                });
+                res.end('Unauthorized');
+                return;
+            }
+            
+            if (req.method === 'GET') {
+                res.writeHead(200, { 'Content-Type': 'application/x-javascript' });
+                res.end('{poe:[0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02]}');
+            } else if (req.method === 'POST') {
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+    });
+
+    const port = await new Promise((resolve) => {
+        server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+    });
+
+    try {
+        process.env.MIKROTIK_IP = `127.0.0.1:${port}`;
+        process.env.POE_CONTROL_METHOD = 'swos-http';
+        process.env.NODES_CONFIG = path.join(TMP, 'nodes.json');
+        await fs.writeFile(process.env.NODES_CONFIG, JSON.stringify([
+            { id: 1, name: 'HVPS-01', poe_port: 3 }
+        ]) + '\n');
+
+        guardian._setShutdownForTesting(null);
+
+        const shutdownResult = await guardian.emergencyShutdown(1, 'test overvoltage');
+        assert.equal(shutdownResult.ok, true);
+
+        const postReq = requests.find(r => r.method === 'POST');
+        assert.ok(postReq);
+        const parsedBody = JSON.parse(postReq.body);
+        assert.deepEqual(parsedBody.poe, [2, 2, 0, 2, 2, 2, 2, 2]);
+
+    } finally {
+        server.close();
+        guardian._setShutdownForTesting(async (nodeId) => { shutdowns.push(nodeId); });
+    }
+});
+
+// ---------------------------------------------------------------------------
 afterEach(async () => {
     // Restore a known-safe config between tests
     await writeConfig({

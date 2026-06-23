@@ -13,6 +13,8 @@ import {
     setGlobalEmergencyStop,
     getLimitsForNode,
     emergencyShutdown,
+    fetchWithDigest,
+    parseSwosResponse,
 } from './safety_guardian.js';
 import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
 
@@ -102,31 +104,78 @@ const pollPoePorts = async () => {
     const ports = [...new Set(nodes.map(n => n.poe_port).filter(Boolean))];
     if (ports.length === 0) return;
 
-    const oids = [];
-    for (const port of ports) {
-      oids.push(`${POE_OID_VOLTAGE}.${port}`);
-      oids.push(`${POE_OID_CURRENT}.${port}`);
-      oids.push(`${POE_OID_POWER}.${port}`);
-    }
+    if (process.env.POE_CONTROL_METHOD === 'swos-http') {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        let res;
+        try {
+          res = await fetchWithDigest(`http://${MIKROTIK_IP}/poe.b`, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
-    session.get(oids, (error, varbinds) => {
-      if (error) {
-        console.warn(`[SNMP POE] Error polling ${oids}:`, error.message);
-        return;
+        if (!res.ok) {
+          console.warn(`[SwOS POE] HTTP error polling PoE: ${res.status}`);
+          poeCache = {};
+          return;
+        }
+        const text = await res.text();
+        const data = parseSwosResponse(text);
+        
+        const voltArray = data.volt || data.i06;
+        const currArray = data.curr || data.i05;
+        const pwrArray = data.pwr || data.i07;
+        
+        if (voltArray && currArray && pwrArray) {
+          const newPoe = {};
+          for (const port of ports) {
+            const idx = port - 1;
+            if (idx >= 0 && idx < voltArray.length) {
+              newPoe[port] = {
+                voltage: (Number(voltArray[idx]) || 0) / 10,   // decivolts → V
+                current: (Number(currArray[idx]) || 0),          // milliamps
+                power:   (Number(pwrArray[idx]) || 0) / 10       // deciwatts → W
+              };
+            }
+          }
+          poeCache = newPoe;
+        } else {
+          console.warn(`[SwOS POE] Expected telemetry arrays not found in SwOS response`);
+          poeCache = {};
+        }
+      } catch (e) {
+        console.warn(`[SwOS POE] Error polling ${MIKROTIK_IP}:`, e.message);
+        poeCache = {};
       }
-      const newPoe = {};
-      for (let i = 0; i < ports.length; i++) {
-        const v = varbinds[i * 3];
-        const a = varbinds[i * 3 + 1];
-        const w = varbinds[i * 3 + 2];
-        newPoe[ports[i]] = {
-          voltage: (Number(v?.value) || 0) / 10,   // decivolts → V
-          current: (Number(a?.value) || 0),          // milliamps
-          power:   (Number(w?.value) || 0) / 10      // deciwatts → W
-        };
+    } else {
+      const oids = [];
+      for (const port of ports) {
+        oids.push(`${POE_OID_VOLTAGE}.${port}`);
+        oids.push(`${POE_OID_CURRENT}.${port}`);
+        oids.push(`${POE_OID_POWER}.${port}`);
       }
-      poeCache = newPoe;
-    });
+
+      session.get(oids, (error, varbinds) => {
+        if (error) {
+          console.warn(`[SNMP POE] Error polling ${oids}:`, error.message);
+          poeCache = {};
+          return;
+        }
+        const newPoe = {};
+        for (let i = 0; i < ports.length; i++) {
+          const v = varbinds[i * 3];
+          const a = varbinds[i * 3 + 1];
+          const w = varbinds[i * 3 + 2];
+          newPoe[ports[i]] = {
+            voltage: (Number(v?.value) || 0) / 10,   // decivolts → V
+            current: (Number(a?.value) || 0),          // milliamps
+            power:   (Number(w?.value) || 0) / 10      // deciwatts → W
+          };
+        }
+        poeCache = newPoe;
+      });
+    }
   } catch (_) { /* nodes.json read failure — ignore, next cycle will retry */ }
 };
 
