@@ -16,21 +16,21 @@ const DigitizerWidget = ({ data }) => {
       <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Trigger Rate</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Trigger Rate</span>
             <span className="text-4xl font-black text-[#1d1d1b]">{data.triggerRate} <span className="text-sm">Hz</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Coincidence</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Coincidence</span>
             <span className="text-xl font-black text-[#be2c2e] uppercase">{data.coincidenceMode}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-[#fafafa] p-4 border border-gray-100">
-            <span className="text-[8px] uppercase text-gray-400 font-black block mb-1">Active Plates</span>
+            <span className="text-[8px] uppercase text-gray-600 font-black block mb-1">Active Plates</span>
             <span className="text-lg font-black text-[#1d1d1b]">{data.activeChannels}</span>
           </div>
           <div className="bg-[#fafafa] p-4 border border-gray-100 text-right">
-            <span className="text-[8px] uppercase text-gray-400 font-black block mb-1">Muon Pulse</span>
+            <span className="text-[8px] uppercase text-gray-600 font-black block mb-1">Muon Pulse</span>
             <div className="flex items-center justify-end gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
               <span className="text-lg font-black text-[#1d1d1b]">LIVE</span>
@@ -54,11 +54,11 @@ const InfraWidget = ({ data }) => {
       <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Bus Voltage</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Bus Voltage</span>
             <span className="text-3xl font-black text-[#be2c2e]">{isOffline ? '--' : `${(data.voltage ?? 0).toFixed(1)}`} <span className="text-sm">V</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] uppercase text-gray-400 font-black mb-1 tracking-widest">Lab Temp</span>
+            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Lab Temp</span>
             <span className="text-3xl font-black text-[#1d1d1b]">{isOffline ? '--' : `${(data.temp ?? 0).toFixed(1)}°C`}</span>
           </div>
         </div>
@@ -179,14 +179,14 @@ export default function App() {
               <h1 className="text-4xl font-black tracking-tighter uppercase leading-none text-[#be2c2e]">
                 Project <span className="text-[#1d1d1b]">Korstmos</span>
               </h1>
-              <p className="text-[10px] uppercase tracking-[0.4em] font-bold mt-2 text-gray-400">
+              <p className="text-[10px] uppercase tracking-[0.4em] font-bold mt-2 text-gray-600">
                 Kosmisch Onderzoek Radboud Studenten Meetopstelling
               </p>
             </div>
           </div>
           <div className="flex gap-6 items-center">
             <div className="text-right">
-              <p className="text-[9px] uppercase font-black text-gray-400 tracking-widest">Array Status</p>
+              <p className="text-[9px] uppercase font-black text-gray-600 tracking-widest">Array Status</p>
               <p className="text-sm font-bold flex items-center gap-2 justify-end">
                 {isEmergencyStopped ? (
                   <><span className="w-2 h-2 rounded-full bg-[#be2c2e]"></span> Halted</>

@@ -5,7 +5,7 @@ import { AlertTriangle, Zap, BatteryMedium, Plug, Cpu } from 'lucide-react';
 function StatusBadge({ status }) {
   const map = {
     online:  { dot: 'bg-emerald-500 animate-pulse', text: 'text-emerald-600' },
-    offline: { dot: 'bg-gray-300',                  text: 'text-gray-400'    },
+    offline: { dot: 'bg-gray-300',                  text: 'text-gray-600'    },
     error:   { dot: 'bg-[#be2c2e]',                 text: 'text-[#be2c2e]'  },
   };
   const s = map[status] || map.offline;
@@ -36,7 +36,7 @@ function ChannelRow({ ch }) {
       <div className="flex justify-between items-end mb-1.5">
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
-            <span className="text-[8px] uppercase font-black text-gray-400 tracking-widest">
+            <span className="text-[8px] uppercase font-black text-gray-600 tracking-widest">
               CH{ch.ch} HV
             </span>
             {isExceeded && (
@@ -45,7 +45,7 @@ function ChannelRow({ ch }) {
               </span>
             )}
           </div>
-          <span className="text-[7px] text-gray-300 font-bold uppercase tracking-widest">
+          <span className="text-[7px] text-gray-500 font-bold uppercase tracking-widest">
              {targetKv > 0 ? `Target: ${targetKv.toFixed(3)} kV` : 'No Target'}
           </span>
         </div>
@@ -53,7 +53,7 @@ function ChannelRow({ ch }) {
           <span className={`text-2xl font-black leading-none ${isExceeded ? 'text-[#be2c2e]' : 'text-[#1d1d1b]'}`}>
             {currentKv.toFixed(3)}
           </span>
-          <span className={`text-[9px] font-bold ${isExceeded ? 'text-[#be2c2e]' : 'text-gray-400'}`}>kV</span>
+          <span className={`text-[9px] font-bold ${isExceeded ? 'text-[#be2c2e]' : 'text-gray-600'}`}>kV</span>
           {isRamping && (
             <span className="text-[8px] font-black text-amber-500 uppercase ml-1 animate-pulse">
               → {targetKv.toFixed(3)}
@@ -70,8 +70,8 @@ function ChannelRow({ ch }) {
       </div>
 
       <div className="flex justify-between mt-0.5">
-        <span className="text-[7px] text-gray-300 font-bold">0</span>
-        <span className="text-[7px] text-gray-300 font-bold">{limitKv.toFixed(1)} kV max</span>
+        <span className="text-[7px] text-gray-500 font-bold">0</span>
+        <span className="text-[7px] text-gray-500 font-bold">{limitKv.toFixed(1)} kV max</span>
       </div>
     </div>
   );
@@ -81,7 +81,7 @@ function ChannelRow({ ch }) {
 function Stat({ label, value, icon }) {
   return (
     <div>
-      <span className="text-[7px] uppercase font-black text-gray-300 block mb-0.5 tracking-widest flex items-center gap-1">
+      <span className="text-[7px] uppercase font-black text-gray-500 block mb-0.5 tracking-widest flex items-center gap-1">
         {icon}{label}
       </span>
       <span className="text-xs font-bold text-[#1d1d1b]">{value}</span>
@@ -112,14 +112,14 @@ export default function NodeCard({ node }) {
         {/* Header */}
         <div className="flex justify-between items-start mb-8">
           <div className="flex items-center gap-4">
-             <div className={`p-2 ${isOnline ? 'bg-[#1d1d1b] text-white' : 'bg-gray-100 text-gray-400'}`}>
+             <div className={`p-2 ${isOnline ? 'bg-[#1d1d1b] text-white' : 'bg-gray-100 text-gray-600'}`}>
                 <Cpu className="w-5 h-5" />
              </div>
              <div>
                 <h3 className="text-lg font-black text-[#1d1d1b] tracking-tighter uppercase leading-none">
                   {name || `Node-${String(node.nodeId).padStart(2, '0')}`}
                 </h3>
-                <p className="text-[9px] uppercase font-bold text-gray-400 tracking-[0.3em] mt-1">PMT Detector Array</p>
+                <p className="text-[9px] uppercase font-bold text-gray-600 tracking-[0.3em] mt-1">PMT Detector Array</p>
              </div>
           </div>
           <div className="flex items-center gap-2">
@@ -146,19 +146,19 @@ export default function NodeCard({ node }) {
         {/* Secondary Metrics */}
         <div className="grid grid-cols-3 gap-4 mt-8 pt-8 border-t border-gray-100">
           <div className="space-y-1">
-            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">PoE Input</p>
+            <p className="text-[10px] uppercase font-black text-gray-600 tracking-widest">PoE Input</p>
             <p className="text-lg font-black text-[#1d1d1b]">
               {isOnline ? `${(power?.poe_v || power?.board_v || power?.v || 0).toFixed(1)}` : '--'} <span className="text-[10px]">V</span>
             </p>
           </div>
           <div className="space-y-1 text-center">
-            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">PoE Current</p>
+            <p className="text-[10px] uppercase font-black text-gray-600 tracking-widest">PoE Current</p>
             <p className="text-lg font-black text-[#1d1d1b]">
               {isOnline && (power?.poe_ma != null || node.sensor_ok) ? `${power?.poe_ma ?? ((power?.a * 1000)?.toFixed(0) || '0')}` : '--'} <span className="text-[10px]">mA</span>
             </p>
           </div>
           <div className="space-y-1 text-right">
-            <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">PoE Power</p>
+            <p className="text-[10px] uppercase font-black text-gray-600 tracking-widest">PoE Power</p>
             <p className="text-lg font-black text-[#1d1d1b]">
               {isOnline && (power?.poe_w != null || node.sensor_ok) ? `${(power?.poe_w ?? power?.w ?? 0).toFixed(1)}` : '--'} <span className="text-[10px]">W</span>
             </p>
@@ -168,7 +168,7 @@ export default function NodeCard({ node }) {
         {/* UPS / power source */}
         {isOnline && ups && (
           <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
-            <span className="text-[8px] uppercase font-black text-gray-400 tracking-widest">Feed Source</span>
+            <span className="text-[8px] uppercase font-black text-gray-600 tracking-widest">Feed Source</span>
             {(power?.poe_v > 0 || power?.ext_power) ? (
               <span className="text-[9px] font-black text-emerald-600 flex items-center gap-2">
                 <Zap className="w-4 h-4" />

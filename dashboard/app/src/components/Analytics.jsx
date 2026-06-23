@@ -51,13 +51,13 @@ export default function Analytics({ history = [], detectors = [] }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="time"
-                  tick={{ fontSize: 8, fill: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}
+                  tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700, textTransform: 'uppercase' }}
                   tickLine={false}
                   axisLine={{ stroke: '#e5e5e5' }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 8, fill: '#9ca3af', fontWeight: 700 }}
+                  tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700 }}
                   tickLine={false}
                   axisLine={false}
                   domain={[0, 'auto']}
@@ -65,7 +65,7 @@ export default function Analytics({ history = [], detectors = [] }) {
                 />
                 <Tooltip
                   contentStyle={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 0, fontSize: 11, fontWeight: 700 }}
-                  labelStyle={{ color: '#9ca3af', textTransform: 'uppercase', fontSize: 9 }}
+                  labelStyle={{ color: '#4b5563', textTransform: 'uppercase', fontSize: 9 }}
                   formatter={(v) => [`${Number(v).toFixed(2)} Hz`, 'Rate']}
                 />
                 <Area
@@ -95,7 +95,7 @@ export default function Analytics({ history = [], detectors = [] }) {
             <thead>
               <tr className="border-b border-[#e5e5e5]">
                 {['Node', 'Status', 'CH1 HV', 'POE V', 'POE A', 'Power'].map(h => (
-                  <th key={h} className="text-[8px] uppercase font-black text-gray-400 tracking-widest text-left py-2 pr-4">{h}</th>
+                  <th key={h} className="text-[8px] uppercase font-black text-gray-600 tracking-widest text-left py-2 pr-4">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -135,11 +135,11 @@ export default function Analytics({ history = [], detectors = [] }) {
 function StatCard({ icon, label, value, unit, color = 'text-[#1d1d1b]' }) {
   return (
     <div className="bg-white border border-[#e5e5e5] p-6">
-      <p className="text-[8px] uppercase font-black text-gray-400 tracking-widest mb-2 flex items-center gap-1.5">
+      <p className="text-[8px] uppercase font-black text-gray-600 tracking-widest mb-2 flex items-center gap-1.5">
         {icon}{label}
       </p>
       <p className={`text-3xl font-black ${color}`}>
-        {value} <span className="text-sm text-gray-400 font-bold">{unit}</span>
+        {value} <span className="text-sm text-gray-600 font-bold">{unit}</span>
       </p>
     </div>
   );
@@ -147,7 +147,7 @@ function StatCard({ icon, label, value, unit, color = 'text-[#1d1d1b]' }) {
 
 function EmptyState({ message }) {
   return (
-    <p className="text-[10px] uppercase font-black text-gray-300 tracking-widest py-8 text-center">
+    <p className="text-[10px] uppercase font-black text-gray-500 tracking-widest py-8 text-center">
       {message}
     </p>
   );
