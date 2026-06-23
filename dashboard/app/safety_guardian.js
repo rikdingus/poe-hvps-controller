@@ -27,6 +27,8 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import crypto from 'crypto';
+import fetch from 'node-fetch';
 
 const MIKROTIK_IP          = process.env.MIKROTIK_IP          || '192.168.88.1';
 const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';
@@ -89,25 +91,175 @@ export async function setGlobalEmergencyStop(value, reason = 'manual') {
     return _config.global_emergency_stop;
 }
 
-// --- SNMP-driven PoE shutdown (lazily init, overridable for tests) --
-async function _defaultShutdown(nodeId) {
-    // Lazy-import net-snmp so that test code that never calls this path
-    // doesn't need the native binding.
-    if (!_snmpModule) {
-        _snmpModule = (await import('net-snmp')).default;
+// --- SwOS HTTP PoE Control Helpers ----------------------------------
+const getNodesConfigPath = () => process.env.NODES_CONFIG || path.resolve(process.cwd(), '../config/nodes.json');
+
+let _cachedAuth = null;
+
+function md5(str) {
+    return crypto.createHash('md5').update(str).digest('hex');
+}
+
+function parseAuthHeader(header) {
+    const obj = {};
+    const matches = header.matchAll(/([a-zA-Z0-9_-]+)="?([^",]+)"?/g);
+    for (const match of matches) {
+        obj[match[1]] = match[2];
     }
-    if (!_snmpSession) {
-        _snmpSession = _snmpModule.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE);
+    const matches2 = header.matchAll(/([a-zA-Z0-9_-]+)=([a-zA-Z0-9_-]+)/g);
+    for (const match of matches2) {
+        if (!obj[match[1]]) {
+            obj[match[1]] = match[2];
+        }
     }
-    // Mapping: detector node N -> MikroTik PoE port N+1.
-    const portIndex = nodeId + 1;
-    const oid = `${POE_CONTROL_OID}.${portIndex}`;
-    return new Promise((resolve, reject) => {
-        _snmpSession.set(
-            [{ oid, type: _snmpModule.ObjectType.Integer, value: 3 }],
-            (error) => error ? reject(error) : resolve()
-        );
+    return obj;
+}
+
+export function parseSwosResponse(text) {
+    let cleaned = text.trim();
+    cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3');
+    if (cleaned.startsWith('{')) {
+        cleaned = cleaned.replace(/^\{\s*([a-zA-Z0-9_]+)\s*:/, '{"$1":');
+    }
+    cleaned = cleaned.replace(/0x([0-9a-fA-F]+)/g, (match, hex) => parseInt(hex, 16));
+    return JSON.parse(cleaned);
+}
+
+export async function fetchWithDigest(url, options = {}) {
+    const username = process.env.MIKROTIK_USERNAME || 'admin';
+    const password = process.env.MIKROTIK_PASSWORD || '';
+    
+    const urlObj = new URL(url);
+    const uri = urlObj.pathname + urlObj.search;
+    const method = options.method || 'GET';
+    
+    function buildHeader(auth, ncValue) {
+        const cnonce = crypto.randomBytes(8).toString('hex');
+        const nc = String(ncValue).padStart(8, '0');
+        const ha1 = md5(`${username}:${auth.realm}:${password}`);
+        const ha2 = md5(`${method}:${uri}`);
+        
+        let response;
+        if (auth.qop) {
+            response = md5(`${ha1}:${auth.nonce}:${nc}:${cnonce}:${auth.qop}:${ha2}`);
+        } else {
+            response = md5(`${ha1}:${auth.nonce}:${ha2}`);
+        }
+        
+        let authHeader = `Digest username="${username}", realm="${auth.realm}", nonce="${auth.nonce}", uri="${uri}", response="${response}"`;
+        if (auth.qop) {
+            authHeader += `, qop=${auth.qop}, nc=${nc}, cnonce="${cnonce}"`;
+        }
+        if (auth.opaque) {
+            authHeader += `, opaque="${auth.opaque}"`;
+        }
+        return authHeader;
+    }
+    
+    let headers = { ...(options.headers || {}) };
+    if (_cachedAuth) {
+        _cachedAuth.nc += 1;
+        headers['Authorization'] = buildHeader(_cachedAuth, _cachedAuth.nc);
+    }
+    
+    let res = await fetch(url, { ...options, headers });
+    if (res.status === 401) {
+        const authHeaderValue = res.headers.get('www-authenticate');
+        if (!authHeaderValue) {
+            throw new Error('401 unauthorized with no WWW-Authenticate header');
+        }
+        
+        const authParams = parseAuthHeader(authHeaderValue);
+        _cachedAuth = {
+            realm: authParams.realm,
+            nonce: authParams.nonce,
+            qop: authParams.qop,
+            opaque: authParams.opaque,
+            nc: 1
+        };
+        
+        headers = { ...(options.headers || {}) };
+        headers['Authorization'] = buildHeader(_cachedAuth, _cachedAuth.nc);
+        res = await fetch(url, { ...options, headers });
+    }
+    
+    return res;
+}
+
+export async function getPoePortForNode(nodeId) {
+    try {
+        const raw = await fs.readFile(getNodesConfigPath(), 'utf-8');
+        const nodes = JSON.parse(raw);
+        const node = nodes.find(n => n.id === nodeId);
+        if (node && typeof node.poe_port === 'number') {
+            return node.poe_port;
+        }
+    } catch (e) {
+        console.warn(`[GUARDIAN] Failed to read nodes config for poe_port lookup: ${e.message}`);
+    }
+    return nodeId + 1;
+}
+
+async function _swosShutdown(port) {
+    const ip = process.env.MIKROTIK_IP || '192.168.88.1';
+    const res = await fetchWithDigest(`http://${ip}/poe.b`);
+    if (!res.ok) {
+        throw new Error(`Failed to fetch current SwOS PoE config: HTTP ${res.status}`);
+    }
+    const text = await res.text();
+    const data = parseSwosResponse(text);
+    
+    const key = data.i01 ? 'i01' : (data.poe ? 'poe' : null);
+    if (!key) {
+        throw new Error('Could not find PoE control array in SwOS response');
+    }
+    
+    const poeArray = data[key];
+    const idx = port - 1;
+    if (idx < 0 || idx >= poeArray.length) {
+        throw new Error(`PoE port ${port} is out of range for SwOS switch (length ${poeArray.length})`);
+    }
+    
+    poeArray[idx] = 0; // 0 = off
+    
+    const payload = JSON.stringify({ [key]: poeArray });
+    const postRes = await fetchWithDigest(`http://${ip}/poe.b`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-javascript'
+        },
+        body: payload
     });
+    
+    if (!postRes.ok) {
+        throw new Error(`Failed to POST SwOS PoE config: HTTP ${postRes.status}`);
+    }
+}
+
+// --- default shutdown switcher (SwOS HTTP or RouterOS SNMP) -----------
+async function _defaultShutdown(nodeId) {
+    const method = process.env.POE_CONTROL_METHOD || 'routeros-snmp';
+    const port = await getPoePortForNode(nodeId);
+    
+    if (method === 'swos-http') {
+        return _swosShutdown(port);
+    } else {
+        // Lazy-import net-snmp so that test code that never calls this path
+        // doesn't need the native binding.
+        if (!_snmpModule) {
+            _snmpModule = (await import('net-snmp')).default;
+        }
+        if (!_snmpSession) {
+            _snmpSession = _snmpModule.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE);
+        }
+        const oid = `${POE_CONTROL_OID}.${port}`;
+        return new Promise((resolve, reject) => {
+            _snmpSession.set(
+                [{ oid, type: _snmpModule.ObjectType.Integer, value: 3 }],
+                (error) => error ? reject(error) : resolve()
+            );
+        });
+    }
 }
 
 /** Test hook: pass a function `(nodeId) => Promise<void>` to bypass SNMP. */
