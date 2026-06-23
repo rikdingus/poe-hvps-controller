@@ -187,6 +187,10 @@ test('parseSwosResponse parses various formats of SwOS responses', () => {
     const r2 = '{"i01":[2,1],"i06":[238,239]}';
     const parsed2 = guardian.parseSwosResponse(r2);
     assert.deepEqual(parsed2, { i01: [2, 1], i06: [238, 239] });
+
+    const r3 = '{poe:[0x02,0x02,0x00],volt:[240,240,0],}';
+    const parsed3 = guardian.parseSwosResponse(r3);
+    assert.deepEqual(parsed3, { poe: [2, 2, 0], volt: [240, 240, 0] });
 });
 
 // ---------------------------------------------------------------------------

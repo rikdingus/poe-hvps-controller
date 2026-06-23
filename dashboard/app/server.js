@@ -106,9 +106,18 @@ const pollPoePorts = async () => {
 
     if (process.env.POE_CONTROL_METHOD === 'swos-http') {
       try {
-        const res = await fetchWithDigest(`http://${MIKROTIK_IP}/poe.b`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        let res;
+        try {
+          res = await fetchWithDigest(`http://${MIKROTIK_IP}/poe.b`, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
         if (!res.ok) {
           console.warn(`[SwOS POE] HTTP error polling PoE: ${res.status}`);
+          poeCache = {};
           return;
         }
         const text = await res.text();
@@ -133,9 +142,11 @@ const pollPoePorts = async () => {
           poeCache = newPoe;
         } else {
           console.warn(`[SwOS POE] Expected telemetry arrays not found in SwOS response`);
+          poeCache = {};
         }
       } catch (e) {
         console.warn(`[SwOS POE] Error polling ${MIKROTIK_IP}:`, e.message);
+        poeCache = {};
       }
     } else {
       const oids = [];
@@ -148,6 +159,7 @@ const pollPoePorts = async () => {
       session.get(oids, (error, varbinds) => {
         if (error) {
           console.warn(`[SNMP POE] Error polling ${oids}:`, error.message);
+          poeCache = {};
           return;
         }
         const newPoe = {};

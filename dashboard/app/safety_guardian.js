@@ -122,6 +122,8 @@ export function parseSwosResponse(text) {
         cleaned = cleaned.replace(/^\{\s*([a-zA-Z0-9_]+)\s*:/, '{"$1":');
     }
     cleaned = cleaned.replace(/0x([0-9a-fA-F]+)/g, (match, hex) => parseInt(hex, 16));
+    // Remove trailing commas in arrays/objects
+    cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
     return JSON.parse(cleaned);
 }
 
@@ -202,7 +204,16 @@ export async function getPoePortForNode(nodeId) {
 
 async function _swosShutdown(port) {
     const ip = process.env.MIKROTIK_IP || '192.168.88.1';
-    const res = await fetchWithDigest(`http://${ip}/poe.b`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    let res;
+    try {
+        res = await fetchWithDigest(`http://${ip}/poe.b`, { signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+    
     if (!res.ok) {
         throw new Error(`Failed to fetch current SwOS PoE config: HTTP ${res.status}`);
     }
@@ -223,13 +234,22 @@ async function _swosShutdown(port) {
     poeArray[idx] = 0; // 0 = off
     
     const payload = JSON.stringify({ [key]: poeArray });
-    const postRes = await fetchWithDigest(`http://${ip}/poe.b`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-javascript'
-        },
-        body: payload
-    });
+    const postController = new AbortController();
+    const postTimeoutId = setTimeout(() => postController.abort(), 3000);
+    
+    let postRes;
+    try {
+        postRes = await fetchWithDigest(`http://${ip}/poe.b`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-javascript'
+            },
+            body: payload,
+            signal: postController.signal
+        });
+    } finally {
+        clearTimeout(postTimeoutId);
+    }
     
     if (!postRes.ok) {
         throw new Error(`Failed to POST SwOS PoE config: HTTP ${postRes.status}`);
