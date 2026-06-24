@@ -12,7 +12,9 @@ import { Activity, Zap, TrendingUp, Clock } from 'lucide-react';
 //   detectors - array of detector node objects
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Analytics({ history = [], detectors = [] }) {
+export default function Analytics({ history = [], detectors = [], downsampledHistory = [] }) {
+  const [activeTab, setActiveTab] = React.useState('rate');
+
   const avgRate = history.length
     ? (history.reduce((s, p) => s + Number(p.rate), 0) / history.length).toFixed(2)
     : '—';
@@ -21,6 +23,17 @@ export default function Analytics({ history = [], detectors = [] }) {
     : '—';
   const onlineCount  = detectors.filter(d => d.status === 'online').length;
   const offlineCount = detectors.filter(d => d.status !== 'online').length;
+
+  const historyData = downsampledHistory.map(item => ({
+    time: new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    rate: item.rate,
+    voltage: item.voltage,
+    temp: item.temp
+  }));
+
+  const chartData = activeTab === 'rate' && historyData.length === 0 
+    ? history 
+    : historyData;
 
   return (
     <div className="space-y-8">
@@ -33,25 +46,73 @@ export default function Analytics({ history = [], detectors = [] }) {
         <StatCard icon={<Clock className="w-4 h-4" />} label="Offline"        value={offlineCount} unit="nodes" color={offlineCount > 0 ? 'text-[#be2c2e]' : undefined} />
       </div>
 
-      {/* ── Trigger rate chart ────────────────────────────────────── */}
+      {/* ── Historical Trend charts ───────────────────────────────── */}
       <div className="bg-white border border-[#e5e5e5] p-8">
-        <h2 className="text-[10px] uppercase font-black tracking-widest text-[#be2c2e] mb-6 flex items-center gap-2">
-          <Activity className="w-3 h-3" /> Muon Trigger Rate — Last {history.length} samples
-        </h2>
-        {history.length > 1 ? (
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-[10px] uppercase font-black tracking-widest text-[#be2c2e] flex items-center gap-2">
+            <Activity className="w-3 h-3" /> Downsampled Telemetry History
+          </h2>
+          <span className="text-[9px] uppercase font-bold text-gray-500">
+            {chartData.length} records loaded
+          </span>
+        </div>
+
+        {/* Tab Selectors */}
+        <div className="flex gap-4 mb-6 border-b border-gray-100 pb-2">
+          <button
+            onClick={() => setActiveTab('rate')}
+            className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest border-b-2 transition-all ${
+              activeTab === 'rate' 
+                ? 'border-[#be2c2e] text-[#be2c2e]' 
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Trigger Rate
+          </button>
+          <button
+            onClick={() => setActiveTab('voltage')}
+            className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest border-b-2 transition-all ${
+              activeTab === 'voltage' 
+                ? 'border-[#d97706] text-[#d97706]' 
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Bus Voltage
+          </button>
+          <button
+            onClick={() => setActiveTab('temp')}
+            className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest border-b-2 transition-all ${
+              activeTab === 'temp' 
+                ? 'border-[#2563eb] text-[#2563eb]' 
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Lab Temperature
+          </button>
+        </div>
+
+        {chartData.length > 0 ? (
           <div className="h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={history} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="rateGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#be2c2e" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#be2c2e" stopOpacity={0}    />
+                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop 
+                      offset="5%"  
+                      stopColor={activeTab === 'rate' ? '#be2c2e' : activeTab === 'voltage' ? '#d97706' : '#2563eb'} 
+                      stopOpacity={0.15} 
+                    />
+                    <stop 
+                      offset="95%" 
+                      stopColor={activeTab === 'rate' ? '#be2c2e' : activeTab === 'voltage' ? '#d97706' : '#2563eb'} 
+                      stopOpacity={0}    
+                    />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="time"
-                  tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700, textTransform: 'uppercase' }}
+                  tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700 }}
                   tickLine={false}
                   axisLine={{ stroke: '#e5e5e5' }}
                   interval="preserveStartEnd"
@@ -60,28 +121,31 @@ export default function Analytics({ history = [], detectors = [] }) {
                   tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700 }}
                   tickLine={false}
                   axisLine={false}
-                  domain={[0, 'auto']}
-                  unit=" Hz"
+                  domain={['auto', 'auto']}
+                  unit={activeTab === 'rate' ? ' Hz' : activeTab === 'voltage' ? ' V' : ' °C'}
                 />
                 <Tooltip
                   contentStyle={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 0, fontSize: 11, fontWeight: 700 }}
                   labelStyle={{ color: '#4b5563', textTransform: 'uppercase', fontSize: 9 }}
-                  formatter={(v) => [`${Number(v).toFixed(2)} Hz`, 'Rate']}
+                  formatter={(v) => [
+                    activeTab === 'rate' ? `${Number(v).toFixed(2)} Hz` : activeTab === 'voltage' ? `${Number(v).toFixed(1)} V` : `${Number(v).toFixed(1)} °C`,
+                    activeTab === 'rate' ? 'Rate' : activeTab === 'voltage' ? 'Voltage' : 'Temp'
+                  ]}
                 />
                 <Area
                   type="monotone"
-                  dataKey="rate"
-                  stroke="#be2c2e"
+                  dataKey={activeTab}
+                  stroke={activeTab === 'rate' ? '#be2c2e' : activeTab === 'voltage' ? '#d97706' : '#2563eb'}
                   strokeWidth={2}
-                  fill="url(#rateGrad)"
+                  fill="url(#chartGrad)"
                   dot={false}
-                  activeDot={{ r: 4, fill: '#be2c2e', strokeWidth: 0 }}
+                  activeDot={{ r: 4, fill: activeTab === 'rate' ? '#be2c2e' : activeTab === 'voltage' ? '#d97706' : '#2563eb', strokeWidth: 0 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <EmptyState message="Waiting for trigger data…" />
+          <EmptyState message="Waiting for trigger history data…" />
         )}
       </div>
 

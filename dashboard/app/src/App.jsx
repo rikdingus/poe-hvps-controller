@@ -3,6 +3,7 @@ import { Activity, ShieldCheck, Zap, Settings, Gauge, TrendingUp, LayoutDashboar
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 import NodeCard from './components/NodeCard';
 import Analytics from './components/Analytics';
+import SettingsView from './components/Settings';
 
 // ─── Sub-widgets ──────────────────────────────────────────────────────────────
 
@@ -78,10 +79,29 @@ export default function App() {
   const [detectors,         setDetectors]         = useState([]);
   const [digitizer,         setDigitizer]         = useState({ triggerRate: 0, coincidenceMode: '2-fold', activeChannels: 4 });
   const [history,           setHistory]           = useState([]);
+  const [downsampledHistory, setDownsampledHistory] = useState([]);
   const [infra,             setInfra]             = useState({ voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: 'Connecting...' });
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false);
   const [eStopPending,      setEStopPending]      = useState(false);
   const [view,              setView]              = useState('dashboard');
+
+  const fetchDownsampledHistory = useCallback(async () => {
+    try {
+      const res = await fetch('/api/history');
+      if (res.ok) {
+        const data = await res.json();
+        setDownsampledHistory(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch downsampled history:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDownsampledHistory();
+    const interval = setInterval(fetchDownsampledHistory, 30000); // refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchDownsampledHistory]);
 
   const handleEmergencyStop = useCallback(async () => {
     setEStopPending(true);
@@ -245,6 +265,14 @@ export default function App() {
             >
               <TrendingUp className="w-4 h-4" /> Event History
             </button>
+            <button
+              onClick={() => setView('settings')}
+              className={`w-full px-8 py-5 text-left font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center gap-4 ${
+                view === 'settings' ? 'bg-[#be2c2e] text-white' : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e]'
+              }`}
+            >
+              <Settings className="w-4 h-4" /> Settings
+            </button>
           </nav>
 
           <DigitizerWidget data={digitizer} />
@@ -279,8 +307,10 @@ export default function App() {
                 <NodeCard key={det.nodeId} node={det} />
               ))}
             </div>
+          ) : view === 'analytics' ? (
+            <Analytics history={history} detectors={detectors} downsampledHistory={downsampledHistory} />
           ) : (
-            <Analytics history={history} detectors={detectors} />
+            <SettingsView />
           )}
         </main>
       </div>
