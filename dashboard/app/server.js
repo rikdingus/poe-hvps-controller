@@ -15,9 +15,14 @@ import {
     emergencyShutdown,
 } from './safety_guardian.js';
 import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
+import { synthDemoStatus, synthDemoInfra, synthDemoPoe } from './demo_fixture.js';
 
 const app = express();
 const PORT = 3000;
+
+// DEMO_MODE: synthesize telemetry instead of doing real fetch/SNMP/MQTT I/O.
+// Default is OFF -- the real hardware path is completely unchanged.
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
 // Initialize Logger
 initLogger();
@@ -45,7 +50,7 @@ app.use(cors());
 app.use(express.json());
 
 // Paths to configurations
-const NODES_CONFIG   = process.env.NODES_CONFIG || '../config/nodes.json';
+const NODES_CONFIG   = process.env.NODES_CONFIG || (DEMO_MODE ? '../config/nodes.demo.json' : '../config/nodes.json');
 const CREDITS_CONFIG = '../config/ai_credits.json';
 
 let nodeCache      = {};
@@ -71,6 +76,11 @@ const createSnmpSession = () => {
 createSnmpSession();
 
 const pollInfra = () => {
+  if (DEMO_MODE) {
+    infraCache = synthDemoInfra();
+    mqttClient.publish('korstmos/infra/health', JSON.stringify(infraCache), { retain: true });
+    return;
+  }
   session.get(Object.values(OIDS), (error, varbinds) => {
     if (!error) {
       infraCache = {
@@ -101,6 +111,11 @@ const pollPoePorts = async () => {
     const nodes = JSON.parse(rawNodes);
     const ports = [...new Set(nodes.map(n => n.poe_port).filter(Boolean))];
     if (ports.length === 0) return;
+
+    if (DEMO_MODE) {
+      poeCache = synthDemoPoe(ports);
+      return;
+    }
 
     const oids = [];
     for (const port of ports) {
@@ -143,20 +158,29 @@ const pollDetectors = async () => {
     for (const node of nodes) {
       let mapped;
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        let rawStatus;
 
-        const res = await fetch(`http://${node.ip}/status`, { signal: controller.signal });
-        clearTimeout(timeoutId);
+        if (DEMO_MODE) {
+          rawStatus = synthDemoStatus(node);
+        } else {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1500);
 
-        if (res.ok) {
-          const rawStatus = await res.json();
+          const res = await fetch(`http://${node.ip}/status`, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            rawStatus = await res.json();
+          } else {
+            mapped = buildOfflineNode(node, 'error', `HTTP ${res.status}`);
+          }
+        }
+
+        if (!mapped) {
           // BUG FIX: use node.name ('HVPS-01' etc.) for safety limit lookup
           const limits = getLimitsForNode(node.name) || {};
           mapped = mapStatusToNode(rawStatus, node, limits);
           mqttClient.publish(`korstmos/detector/${node.id}/telemetry`, JSON.stringify(mapped), { retain: true });
-        } else {
-          mapped = buildOfflineNode(node, 'error', `HTTP ${res.status}`);
         }
       } catch (e) {
         const reason = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'unknown';
