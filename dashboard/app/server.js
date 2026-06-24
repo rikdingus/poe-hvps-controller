@@ -5,7 +5,13 @@ import path from 'path';
 import fetch from 'node-fetch';
 import mqtt from 'mqtt';
 import snmp from 'net-snmp';
-import { initLogger, logTelemetry } from './telemetry_logger.js';
+import {
+  initLogger,
+  logTelemetry,
+  initDownsampledLogger,
+  logDownsampledSample,
+  readDownsampledHistory
+} from './telemetry_logger.js';
 import {
     checkSafety,
     loadSafetyConfig,
@@ -21,8 +27,33 @@ import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
 const app = express();
 const PORT = 3000;
 
-// Initialize Logger
+// Initialize Loggers
 initLogger();
+initDownsampledLogger().catch(e => console.error('[LOGGER] Downsampled Logger init failed:', e));
+
+let downsampledHistory = [];
+const loadHistory = async () => {
+  try {
+    downsampledHistory = await readDownsampledHistory(8640);
+    // If starting fresh with no history, add an initial data point
+    if (downsampledHistory.length === 0) {
+      const rate = 0.0;
+      const voltage = 26.0;
+      const temp = 22.0;
+      await logDownsampledSample(rate, voltage, temp);
+      downsampledHistory.push({
+        timestamp: new Date().toISOString(),
+        rate,
+        voltage,
+        temp
+      });
+    }
+    console.log(`[LOGGER] Loaded ${downsampledHistory.length} downsampled history data points.`);
+  } catch (e) {
+    console.error('[LOGGER] Failed to load downsampled history:', e.message);
+  }
+};
+loadHistory();
 
 // Infrastructure Configuration
 const MIKROTIK_IP = process.env.MIKROTIK_IP || '192.168.88.1';
@@ -248,10 +279,32 @@ setInterval(pollDetectors, 2000);
 setInterval(pollInfra,     5000);
 setInterval(pollPoePorts,  5000);  // per-port PoE telemetry from switch
 
+// 5-minute downsample interval for telemetry history
+setInterval(async () => {
+  try {
+    const rate = parseFloat(digitizerCache.triggerRate) || 0;
+    const voltage = infraCache.voltage || 0;
+    const temp = infraCache.temp || 0;
+    await logDownsampledSample(rate, voltage, temp);
+    downsampledHistory.push({
+      timestamp: new Date().toISOString(),
+      rate,
+      voltage,
+      temp
+    });
+    if (downsampledHistory.length > 8640) {
+      downsampledHistory.shift();
+    }
+  } catch (e) {
+    console.error('[LOGGER] Error logging downsampled sample:', e);
+  }
+}, 5 * 60 * 1000);
+
 // ---- Detector / digitizer / infra endpoints -------------------------
 app.get('/api/detectors', (req, res) => res.json(Object.values(nodeCache)));
 app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
 app.get('/api/infra',      (req, res) => res.json(infraCache));
+app.get('/api/history',    (req, res) => res.json(downsampledHistory));
 
 app.post('/api/reboot-detector/:id', async (req, res) => {
   const nodeId = req.params.id;
@@ -273,11 +326,42 @@ app.get('/api/credits', async (req, res) => {
 // ---- Safety endpoints -----------------------------------------------
 app.get('/api/safety-status', async (req, res) => {
   try {
-    await loadSafetyConfig();
+    const config = await loadSafetyConfig();
     const rawNodes = await fs.readFile(NODES_CONFIG, 'utf-8');
     const nodes = JSON.parse(rawNodes);
     const limits = nodes.map(n => ({ name: n.name, ...getLimitsForNode(n.name) }));
-    res.json({ global_emergency_stop: isGlobalEmergencyStop(), limits });
+    res.json({
+      global_emergency_stop: isGlobalEmergencyStop(),
+      limits,
+      default_limits: config.default_limits,
+      channel_overrides: config.channel_overrides
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/safety-limits', async (req, res) => {
+  try {
+    const { default_limits, channel_overrides } = req.body;
+    if (!default_limits || !channel_overrides) {
+      return res.status(400).json({ error: 'Missing default_limits or channel_overrides' });
+    }
+    const safetyConfigPath = path.join(path.resolve(), '../config/safety_limits.json');
+    
+    // Read current config to preserve global_emergency_stop
+    const currentRaw = await fs.readFile(safetyConfigPath, 'utf-8');
+    const currentConfig = JSON.parse(currentRaw);
+    
+    const newConfig = {
+      global_emergency_stop: currentConfig.global_emergency_stop,
+      default_limits,
+      channel_overrides
+    };
+    
+    await fs.writeFile(safetyConfigPath, JSON.stringify(newConfig, null, 2));
+    await loadSafetyConfig(); // reload into memory
+    res.json({ success: true, config: newConfig });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

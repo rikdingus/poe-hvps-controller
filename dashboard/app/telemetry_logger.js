@@ -3,6 +3,7 @@ import path from 'path';
 
 const LOG_DIR = path.join(process.cwd(), 'logs');
 const TELEMETRY_FILE = path.join(LOG_DIR, `telemetry_${new Date().toISOString().split('T')[0]}.csv`);
+const DOWNSAMPLED_FILE = path.join(LOG_DIR, 'history_downsampled.csv');
 
 export async function initLogger() {
   try {
@@ -35,3 +36,49 @@ export async function logTelemetry(nodeData, infraData) {
     console.error('[LOGGER] Log write failed:', e);
   }
 }
+
+export async function initDownsampledLogger() {
+  try {
+    await fs.mkdir(LOG_DIR, { recursive: true });
+    try {
+      await fs.access(DOWNSAMPLED_FILE);
+    } catch {
+      const header = 'timestamp,rate,voltage,temp\n';
+      await fs.writeFile(DOWNSAMPLED_FILE, header);
+    }
+  } catch (e) {
+    console.error('[LOGGER] Downsampled Logger init failed:', e);
+  }
+}
+
+export async function logDownsampledSample(rate, voltage, temp) {
+  try {
+    const timestamp = new Date().toISOString();
+    const row = `${timestamp},${rate},${voltage},${temp}\n`;
+    await fs.appendFile(DOWNSAMPLED_FILE, row);
+  } catch (e) {
+    console.error('[LOGGER] Downsampled Log write failed:', e);
+  }
+}
+
+export async function readDownsampledHistory(limit = 8640) {
+  try {
+    await initDownsampledLogger();
+    const content = await fs.readFile(DOWNSAMPLED_FILE, 'utf-8');
+    const lines = content.trim().split('\n').slice(1); // skip header
+    const lastLines = lines.slice(-limit);
+    return lastLines.map(line => {
+      const parts = line.split(',');
+      return {
+        timestamp: parts[0],
+        rate: parseFloat(parts[1]) || 0,
+        voltage: parseFloat(parts[2]) || 0,
+        temp: parseFloat(parts[3]) || 0
+      };
+    });
+  } catch (e) {
+    console.error('[LOGGER] Reading downsampled history failed:', e);
+    return [];
+  }
+}
+
