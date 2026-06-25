@@ -7,9 +7,15 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:stable-alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-# Copy a custom nginx config if needed for SPA routing
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --only=production
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/server.js ./server.js
+COPY --from=build /app/node_mapper.js ./node_mapper.js
+COPY --from=build /app/safety_guardian.js ./safety_guardian.js
+COPY --from=build /app/telemetry_logger.js ./telemetry_logger.js
+
+EXPOSE 3000
+CMD ["node", "server.js"]

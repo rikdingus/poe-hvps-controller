@@ -50,7 +50,7 @@ export function buildOfflineNode(nodeConfig, status = 'offline', errorMsg = null
         name: nodeConfig.name || `Detector-${String(nodeConfig.id).padStart(2, '0')}`,
         status,
         channels: [],
-        power: { v: 0, a: 0, w: 0 },
+        power: { v: 0, a: 0, w: 0, board_v: 0, ext_power: false },
         ups: { battery_pct: null, source: 'unknown' },
         sensor_ok: false,
         lastSeen: new Date().toISOString(),
@@ -156,9 +156,9 @@ export function mapStatusToNode(rawStatus, nodeConfig, limits = {}) {
         },
         ups: {
             // Firmware doesn't yet report battery state -- defaults until UPS
-            // telemetry is wired up. Source heuristic: ext_power flag from GPIO39.
+            // telemetry is wired up. Source heuristic: ext_power flag from GPIO39, fallback to PoE rail >30V.
             battery_pct: _toFiniteIntegerOrNull(rawStatus.batt),
-            source: rawStatus.ep ? 'dc' : 'battery'
+            source: rawStatus.ep !== undefined ? (rawStatus.ep ? 'dc' : 'battery') : (_toFiniteNumber(rawStatus.v) > 30 ? 'dc' : 'battery')
         },
         sensor_ok: !!rawStatus.ok,
         lastSeen: new Date().toISOString(),
