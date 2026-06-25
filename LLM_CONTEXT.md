@@ -27,7 +27,8 @@ A high-precision Cosmic Ray Observatory (KORSTMOS). 10 detector nodes monitor mu
   "c1": 127, "c2": 127, 
   "ok": true,
   "hv1g": 1025.5, "hv1o": 5.2,
-  "hv2g": 1025.5, "hv2o": 5.2
+  "hv2g": 1025.5, "hv2o": 5.2,
+  "h1": 104230, "h2": 95021
 }
 ```
 *Note: `hv[N]g` and `hv[N]o` are gain and offset used for the linear transformation `kV = (ADC * gain + offset) / 1000`.*
@@ -46,8 +47,8 @@ The `safety_guardian.js` monitors the calibrated `kV` values. If any channel exc
 2. Cuts PoE power to the specific port for the detected node.
 3. Locks the dashboard into an "ACQUISITION HALTED" state.
 
-## 5. Ongoing Research: 20ns Capture
-We are currently investigating the use of the **ESP32 PCNT (Pulse Counter)** to detect 20ns muon pulses directly on the Olimex nodes. Refer to `docs/high_speed_pulse_capture.md`.
+## 5. High-Speed 20ns Capture (Implemented)
+The firmware now utilizes the **ESP32 PCNT (Pulse Counter)** peripheral on **GPIO 14** and **GPIO 15** to directly detect 20ns muon pulses without software ISR latency. The `h1` and `h2` fields in the telemetry payload provide 64-bit cumulative hit counts. The backend `node_mapper.js` derives the real-time trigger rate (Hz). Refer to `docs/high_speed_pulse_capture.md`.
 
 ---
 

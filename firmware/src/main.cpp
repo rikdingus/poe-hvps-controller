@@ -6,6 +6,16 @@
 #include <INA226.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <driver/pcnt.h>
+#include <ArduinoOTA.h>
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  // No secrets.h on this build -- OTA will be disabled. Copy
+  // firmware/src/secrets.h.example to firmware/src/secrets.h and set
+  // OTA_PASSWORD_HASH to a non-empty SHA-256 hash to enable OTA flashing.
+  #define OTA_PASSWORD_HASH ""
+#endif
 
 // --- Firmware Info ---
 #define FW_VERSION "1.1.0"
@@ -15,6 +25,78 @@
 #define I2C_SCL 16
 #define ADC_HV1 32
 #define ADC_HV2 33
+#define PULSE_PIN_1 14
+#define PULSE_PIN_2 15
+
+// --- Olimex On-Board Power Sensing ---
+#define POWER_SENSE 39   // Digital: HIGH = external power present
+#define BATTERY_PIN 35   // ADC: input voltage via 2:1 resistor divider
+const float RESISTOR_COEFF = 2.0;  // R1+R7 / R7 per Olimex schematic
+
+// --- PCNT Pulse Tracking ---
+#define PCNT_H_LIM_VAL 10000
+volatile uint32_t pcnt0_overflows = 0;
+volatile uint32_t pcnt1_overflows = 0;
+
+static void IRAM_ATTR pcnt_intr_handler(void *arg) {
+    int unit = (int)arg;
+    if (unit == PCNT_UNIT_0) pcnt0_overflows++;
+    else if (unit == PCNT_UNIT_1) pcnt1_overflows++;
+}
+
+void initPCNT() {
+    pcnt_config_t pcnt_config_0 = {
+        .pulse_gpio_num = PULSE_PIN_1,
+        .ctrl_gpio_num = PCNT_PIN_NOT_USED,
+        .lctrl_mode = PCNT_MODE_KEEP,
+        .hctrl_mode = PCNT_MODE_KEEP,
+        .pos_mode = PCNT_COUNT_INC,
+        .neg_mode = PCNT_COUNT_DIS,
+        .counter_h_lim = PCNT_H_LIM_VAL,
+        .counter_l_lim = -1,
+        .unit = PCNT_UNIT_0,
+        .channel = PCNT_CHANNEL_0
+    };
+    pcnt_unit_config(&pcnt_config_0);
+    pcnt_filter_disable(PCNT_UNIT_0);
+
+    pcnt_config_t pcnt_config_1 = {
+        .pulse_gpio_num = PULSE_PIN_2,
+        .ctrl_gpio_num = PCNT_PIN_NOT_USED,
+        .lctrl_mode = PCNT_MODE_KEEP,
+        .hctrl_mode = PCNT_MODE_KEEP,
+        .pos_mode = PCNT_COUNT_INC,
+        .neg_mode = PCNT_COUNT_DIS,
+        .counter_h_lim = PCNT_H_LIM_VAL,
+        .counter_l_lim = -1,
+        .unit = PCNT_UNIT_1,
+        .channel = PCNT_CHANNEL_0
+    };
+    pcnt_unit_config(&pcnt_config_1);
+    pcnt_filter_disable(PCNT_UNIT_1);
+
+    pcnt_event_enable(PCNT_UNIT_0, PCNT_EVT_H_LIM);
+    pcnt_event_enable(PCNT_UNIT_1, PCNT_EVT_H_LIM);
+
+    pcnt_isr_service_install(0);
+    pcnt_isr_handler_add(PCNT_UNIT_0, pcnt_intr_handler, (void *)PCNT_UNIT_0);
+    pcnt_isr_handler_add(PCNT_UNIT_1, pcnt_intr_handler, (void *)PCNT_UNIT_1);
+
+    pcnt_counter_pause(PCNT_UNIT_0);
+    pcnt_counter_clear(PCNT_UNIT_0);
+    pcnt_counter_resume(PCNT_UNIT_0);
+    pcnt_counter_pause(PCNT_UNIT_1);
+    pcnt_counter_clear(PCNT_UNIT_1);
+    pcnt_counter_resume(PCNT_UNIT_1);
+}
+
+uint64_t getHits(pcnt_unit_t unit) {
+    int16_t count = 0;
+    pcnt_get_counter_value(unit, &count);
+    if (unit == PCNT_UNIT_0) return (uint64_t)pcnt0_overflows * PCNT_H_LIM_VAL + count;
+    else return (uint64_t)pcnt1_overflows * PCNT_H_LIM_VAL + count;
+}
+
 
 // --- HV Feedback Calibration ---
 // Adjust these after measuring with a known reference.
@@ -47,6 +129,8 @@ bool ina_ok        = false;
 bool eth_connected = false;
 unsigned long lastSensorRead = 0;
 unsigned long uptime_seconds = 0;
+float board_voltage = 0;    // Olimex on-board voltage measurement
+bool  ext_power     = false; // External power (PoE) present flag
 
 const unsigned long SENSOR_INTERVAL = 500; // Read sensors every 500ms
 
@@ -88,6 +172,8 @@ void readSensors() {
   }
   hv1_feedback = analogReadMilliVolts(ADC_HV1) / 1000.0f;
   hv2_feedback = analogReadMilliVolts(ADC_HV2) / 1000.0f;
+  board_voltage = analogReadMilliVolts(BATTERY_PIN) * RESISTOR_COEFF / 1000.0f;
+  ext_power = digitalRead(POWER_SENSE);
   uptime_seconds = millis() / 1000;
 
   // Log telemetry
@@ -104,6 +190,28 @@ void addCorsHeaders(AsyncWebServerResponse* response) {
   response->addHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+// --- OTA Setup ---
+void setupOTA() {
+  ArduinoOTA.onStart([]() {
+    String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
+    Serial.println("[OTA] Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] End");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+}
+
 // --- Ethernet Event Handler ---
 void onEthEvent(WiFiEvent_t event) {
   switch (event) {
@@ -114,6 +222,13 @@ void onEthEvent(WiFiEvent_t event) {
     case ARDUINO_EVENT_ETH_GOT_IP:
       Serial.printf("[ETH] IP: %s\n", ETH.localIP().toString().c_str());
       eth_connected = true;
+      if (String(OTA_PASSWORD_HASH) != "") {
+        setupOTA();
+        ArduinoOTA.setPasswordHash(OTA_PASSWORD_HASH);
+        ArduinoOTA.begin();
+      } else {
+        Serial.println("[OTA] Disabled: OTA_PASSWORD_HASH is unset.");
+      }
       if (MDNS.begin("hvps")) {
         MDNS.addService("http", "tcp", 80);
       }
@@ -141,6 +256,13 @@ void setup() {
   WiFi.onEvent(onEthEvent);
   Wire.begin(I2C_SDA, I2C_SCL);
   ETH.begin();
+
+  // Olimex on-board power sensing
+  pinMode(POWER_SENSE, INPUT);
+  pinMode(BATTERY_PIN, INPUT);
+  analogSetPinAttenuation(BATTERY_PIN, ADC_11db);
+
+  initPCNT();
 
   ina_ok = INA.begin();
   if (ina_ok) INA.setMaxCurrentShunt(2.0, 0.01);
@@ -179,6 +301,10 @@ void setup() {
     doc["hv1o"] = hv1_offset;
     doc["hv2g"] = hv2_gain;
     doc["hv2o"] = hv2_offset;
+    doc["h1"]  = getHits(PCNT_UNIT_0);
+    doc["h2"]  = getHits(PCNT_UNIT_1);
+    doc["bv"]  = board_voltage;
+    doc["ep"]  = ext_power;
     String res;
     serializeJson(doc, res);
     auto *resp = req->beginResponse(200, "application/json", res);
@@ -229,6 +355,8 @@ void setup() {
     doc["mac"] = ETH.macAddress();
     doc["ip"] = ETH.localIP().toString();
     doc["uptime"] = uptime_seconds;
+    doc["h1"] = getHits(PCNT_UNIT_0);
+    doc["h2"] = getHits(PCNT_UNIT_1);
     String res;
     serializeJson(doc, res);
     auto *resp = req->beginResponse(200, "application/json", res);
@@ -240,6 +368,7 @@ void setup() {
 }
 
 void loop() {
+  ArduinoOTA.handle();
   processSlewRate();
   readSensors();
   delay(1);
