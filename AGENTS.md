@@ -32,6 +32,7 @@ for **scope** decisions; this file wins for **process** decisions.
 | Agent          | Platform                  | Model                    | Default role from `multi_model_workflow.md` |
 |----------------|---------------------------|--------------------------|---------------------------------------------|
 | Cowork-Claude  | Anthropic Claude (Cowork) | Claude Opus / Sonnet 4.6 | **Craftsman** — backend, firmware, complex logic |
+| Home-PC Claude | Anthropic Claude (home PC, `rikaorusb550`) | Claude Opus 4.x | **DevOps** -- drives `korstmos-wsl-1` over Tailscale SSH (toolchain, builds, patch series); docs/PRs |
 | Antigravity    | Google Antigravity IDE    | Gemini 3 Pro / Flash     | **Architect** + **Auditor** — scaffolding, security review |
 | Human (Rik)    | —                         | —                        | Tiebreaker, hardware bring-up, signs off on releases |
 
