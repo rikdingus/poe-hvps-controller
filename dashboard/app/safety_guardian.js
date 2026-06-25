@@ -92,7 +92,11 @@ export async function setGlobalEmergencyStop(value, reason = 'manual') {
 }
 
 // --- SwOS HTTP PoE Control Helpers ----------------------------------
-const getNodesConfigPath = () => process.env.NODES_CONFIG || path.resolve(process.cwd(), '../config/nodes.json');
+const getNodesConfigPath = () => {
+    if (process.env.NODES_CONFIG) return process.env.NODES_CONFIG;
+    const isDemo = process.env.DEMO_MODE === 'true';
+    return path.resolve(process.cwd(), isDemo ? '../config/nodes.demo.json' : '../config/nodes.json');
+};
 
 let _cachedAuth = null;
 
