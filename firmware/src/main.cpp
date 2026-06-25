@@ -106,15 +106,21 @@ float hv1_offset = 0.0;
 float hv2_gain = 1000.0;
 float hv2_offset = 0.0;
 unsigned long ramp_interval = 4;    // ~1s for full 0-255 sweep
+const unsigned long RAMP_INTERVAL_MIN = 1;     // ms; <1 would DoS the slew loop
+const unsigned long RAMP_INTERVAL_MAX = 1000;  // ms; protects PMTs from runaway
 
 // --- Devices ---
 INA226 INA(0x40);
 AsyncWebServer server(80);
 
 // --- State & Slew Rate ---
+// Safe boot: both RDAC channels start at 0 (HV off). Operators must
+// explicitly command a target via POST /set; we never come up half-rail.
+// current is read by both loop() and the /status HTTP handler -- mark it
+// volatile to defeat compiler caching of stale values across threads.
 struct Channel {
-  volatile uint8_t target = 127;
-  uint8_t current = 127;
+  volatile uint8_t target = 0;
+  volatile uint8_t current = 0;
   unsigned long lastStep = 0;
 };
 
@@ -252,6 +258,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 void setup() {
   Serial.begin(115200);
   Serial.printf("\n[HVPS] Firmware v%s\n", FW_VERSION);
+  Serial.println("[HVPS] Safe-boot: RDAC channels initialised to 0 (HV off)");
 
   WiFi.onEvent(onEthEvent);
   Wire.begin(I2C_SDA, I2C_SCL);
@@ -322,8 +329,14 @@ void setup() {
     }
     int p = req->getParam("pot", true)->value().toInt();
     int v = constrain(req->getParam("val", true)->value().toInt(), 0, 255);
+    if (p != 1 && p != 2) {
+      auto *resp = req->beginResponse(400, "text/plain", "pot must be 1 or 2");
+      addCorsHeaders(resp);
+      req->send(resp);
+      return;
+    }
     if (p == 1) ch1.target = v;
-    else if (p == 2) ch2.target = v;
+    else ch2.target = v;
     auto *resp = req->beginResponse(200, "text/plain", "OK");
     addCorsHeaders(resp);
     req->send(resp);
@@ -336,7 +349,13 @@ void setup() {
     if (request->hasParam("ratio2")) { hv2_gain = request->getParam("ratio2")->value().toFloat(); updated = true; }
     if (request->hasParam("offset1")) { hv1_offset = request->getParam("offset1")->value().toFloat(); updated = true; }
     if (request->hasParam("offset2")) { hv2_offset = request->getParam("offset2")->value().toFloat(); updated = true; }
-    if (request->hasParam("ramp")) { ramp_interval = request->getParam("ramp")->value().toInt(); updated = true; }
+    if (request->hasParam("ramp")) {
+      long r = request->getParam("ramp")->value().toInt();
+      if (r < (long)RAMP_INTERVAL_MIN) r = RAMP_INTERVAL_MIN;
+      if (r > (long)RAMP_INTERVAL_MAX) r = RAMP_INTERVAL_MAX;
+      ramp_interval = (unsigned long)r;
+      updated = true;
+    }
     
     if (updated) {
       auto *resp = request->beginResponse(200, "text/plain", "Calibration Updated");
