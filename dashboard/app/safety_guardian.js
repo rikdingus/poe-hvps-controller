@@ -206,70 +206,63 @@ export async function getPoePortForNode(nodeId) {
     return nodeId + 1;
 }
 
-async function _swosShutdown(port) {
-    const ip = process.env.MIKROTIK_IP || '192.168.88.1';
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    
-    let res;
-    try {
-        res = await fetchWithDigest(`http://${ip}/poe.b`, { signal: controller.signal });
-    } finally {
-        clearTimeout(timeoutId);
-    }
-    
-    if (!res.ok) {
-        throw new Error(`Failed to fetch current SwOS PoE config: HTTP ${res.status}`);
-    }
-    const text = await res.text();
-    const data = parseSwosResponse(text);
-    
-    const key = data.i01 ? 'i01' : (data.poe ? 'poe' : null);
-    if (!key) {
-        throw new Error('Could not find PoE control array in SwOS response');
-    }
-    
-    const poeArray = data[key];
-    const idx = port - 1;
-    if (idx < 0 || idx >= poeArray.length) {
-        throw new Error(`PoE port ${port} is out of range for SwOS switch (length ${poeArray.length})`);
-    }
-    
-    poeArray[idx] = 0; // 0 = off
-    
-    const payload = JSON.stringify({ [key]: poeArray });
-    const postController = new AbortController();
-    const postTimeoutId = setTimeout(() => postController.abort(), 3000);
-    
-    let postRes;
-    try {
-        postRes = await fetchWithDigest(`http://${ip}/poe.b`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-javascript'
-            },
-            body: payload,
-            signal: postController.signal
-        });
-    } finally {
-        clearTimeout(postTimeoutId);
-    }
-    
-    if (!postRes.ok) {
-        throw new Error(`Failed to POST SwOS PoE config: HTTP ${postRes.status}`);
-    }
-}
-
-// --- default shutdown switcher (SwOS HTTP or RouterOS SNMP) -----------
-async function _defaultShutdown(nodeId) {
+export async function setPoeState(port, state) {
     const method = process.env.POE_CONTROL_METHOD || 'routeros-snmp';
-    const port = await getPoePortForNode(nodeId);
     
     if (method === 'swos-http') {
-        return _swosShutdown(port);
+        const ip = process.env.MIKROTIK_IP || '192.168.88.1';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        let res;
+        try {
+            res = await fetchWithDigest(`http://${ip}/poe.b`, { signal: controller.signal });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+        
+        if (!res.ok) {
+            throw new Error(`Failed to fetch current SwOS PoE config: HTTP ${res.status}`);
+        }
+        const text = await res.text();
+        const data = parseSwosResponse(text);
+        
+        const key = data.i01 ? 'i01' : (data.poe ? 'poe' : null);
+        if (!key) {
+            throw new Error('Could not find PoE control array in SwOS response');
+        }
+        
+        const poeArray = data[key];
+        const idx = port - 1;
+        if (idx < 0 || idx >= poeArray.length) {
+            throw new Error(`PoE port ${port} is out of range for SwOS switch (length ${poeArray.length})`);
+        }
+        
+        // SwOS states: 0 = off, 1 = auto, 2 = on
+        poeArray[idx] = state === 0 ? 0 : 1;
+        
+        const payload = JSON.stringify({ [key]: poeArray });
+        const postController = new AbortController();
+        const postTimeoutId = setTimeout(() => postController.abort(), 3000);
+        
+        let postRes;
+        try {
+            postRes = await fetchWithDigest(`http://${ip}/poe.b`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-javascript'
+                },
+                body: payload,
+                signal: postController.signal
+            });
+        } finally {
+            clearTimeout(postTimeoutId);
+        }
+        
+        if (!postRes.ok) {
+            throw new Error(`Failed to POST SwOS PoE config: HTTP ${postRes.status}`);
+        }
     } else {
-        // Lazy-import net-snmp so that test code that never calls this path
-        // doesn't need the native binding.
         if (!_snmpModule) {
             _snmpModule = (await import('net-snmp')).default;
         }
@@ -278,12 +271,19 @@ async function _defaultShutdown(nodeId) {
         }
         const oid = `${POE_CONTROL_OID}.${port}`;
         return new Promise((resolve, reject) => {
+            const val = state === 0 ? 3 : 1;
             _snmpSession.set(
-                [{ oid, type: _snmpModule.ObjectType.Integer, value: 3 }],
+                [{ oid, type: _snmpModule.ObjectType.Integer, value: val }],
                 (error) => error ? reject(error) : resolve()
             );
         });
     }
+}
+
+// --- default shutdown switcher (SwOS HTTP or RouterOS SNMP) -----------
+async function _defaultShutdown(nodeId) {
+    const port = await getPoePortForNode(nodeId);
+    return setPoeState(port, 0);
 }
 
 /** Test hook: pass a function `(nodeId) => Promise<void>` to bypass SNMP. */
