@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server.js",
     "audit": "node --env-file-if-exists=.env audit_environment.js",
-    "test": "node --test *.test.js"
+    "test": "node --test"
   },
   "devDependencies": {
     "autoprefixer": "^10.5.0",
