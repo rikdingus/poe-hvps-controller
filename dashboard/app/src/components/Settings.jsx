@@ -7,6 +7,7 @@ export default function Settings() {
     max_poe_current_amps: 1.5,
     max_temp_c: 65
   });
+  const [apiToken, setApiToken] = useState(localStorage.getItem('DASHBOARD_API_TOKEN') || '');
   const [channelOverrides, setChannelOverrides] = useState({});
   const [newOverrideNode, setNewOverrideNode] = useState('');
   const [loading, setLoading] = useState(true);
@@ -96,10 +97,22 @@ export default function Settings() {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
+
+    if (apiToken.trim()) {
+      localStorage.setItem('DASHBOARD_API_TOKEN', apiToken.trim());
+    } else {
+      localStorage.removeItem('DASHBOARD_API_TOKEN');
+    }
+
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiToken.trim()) {
+        headers['Authorization'] = `Bearer ${apiToken.trim()}`;
+      }
+
       const res = await fetch('/api/safety-limits', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           default_limits: defaultLimits,
           channel_overrides: channelOverrides
@@ -285,6 +298,24 @@ export default function Settings() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* API Access Security */}
+      <div className="space-y-4 pt-4 border-t border-gray-100">
+        <h3 className="text-xs font-black uppercase text-gray-700 tracking-widest border-b border-gray-50 pb-2">API Write Authentication</h3>
+        <div className="space-y-1 max-w-md">
+          <label className="text-[10px] uppercase font-black text-gray-600 block tracking-wider">Dashboard API Bearer Token</label>
+          <input
+            type="password"
+            placeholder="Enter DASHBOARD_API_TOKEN"
+            value={apiToken}
+            onChange={(e) => setApiToken(e.target.value)}
+            className="w-full border border-[#e5e5e5] px-3 py-2 font-mono text-sm focus:outline-none focus:border-[#be2c2e]"
+          />
+          <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block mt-1">
+            Required if DASHBOARD_API_TOKEN is enabled on the server. Stored locally in your browser.
+          </span>
+        </div>
       </div>
     </form>
   );

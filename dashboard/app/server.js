@@ -508,7 +508,7 @@ app.get('/api/safety-status', async (req, res) => {
   }
 });
 
-app.post('/api/safety-limits', async (req, res) => {
+app.post('/api/safety-limits', requireBearer, async (req, res) => {
   try {
     const { default_limits, channel_overrides } = req.body;
     if (!default_limits || !channel_overrides) {

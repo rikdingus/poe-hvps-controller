@@ -106,9 +106,14 @@ export default function App() {
   const handleEmergencyStop = useCallback(async () => {
     setEStopPending(true);
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('DASHBOARD_API_TOKEN');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       await fetch('/api/emergency-stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ active: true, reason: 'dashboard-halt-button' }),
       });
     } catch (e) {
@@ -125,9 +130,14 @@ export default function App() {
 
   const handleResume = useCallback(async () => {
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('DASHBOARD_API_TOKEN');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       await fetch('/api/emergency-stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ active: false, reason: 'dashboard-resume' }),
       });
     } catch (e) {
