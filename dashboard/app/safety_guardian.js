@@ -34,7 +34,7 @@ const MIKROTIK_IP          = process.env.MIKROTIK_IP          || '192.168.88.1';
 const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';
 const SAFETY_CONFIG_PATH   = process.env.SAFETY_CONFIG        || path.resolve(process.cwd(), '../config/safety_limits.json');
 // MikroTik PoE control OID. Values: 1=auto-on, 2=forced-on, 3=off.
-const POE_CONTROL_OID      = '.1.3.6.1.4.1.14988.1.1.15.1.1.2';
+const POE_CONTROL_OID      = '1.3.6.1.4.1.14988.1.1.15.1.1.2';
 
 let _config        = null;   // cached parsed JSON
 let _configMtimeMs = null;   // mtime when last loaded (for hot-reload)
