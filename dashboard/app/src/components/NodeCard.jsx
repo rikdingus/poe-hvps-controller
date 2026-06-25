@@ -204,7 +204,15 @@ export default function NodeCard({ node }) {
               const btn = document.getElementById(`reboot-btn-${node.nodeId}`);
               if (btn) btn.disabled = true;
               try {
-                const res = await fetch(`/api/reboot-detector/${node.nodeId}`, { method: 'POST' });
+                const headers = { 'Content-Type': 'application/json' };
+                const token = localStorage.getItem('DASHBOARD_API_TOKEN');
+                if (token) {
+                  headers['Authorization'] = `Bearer ${token}`;
+                }
+                const res = await fetch(`/api/reboot-detector/${node.nodeId}`, {
+                  method: 'POST',
+                  headers
+                });
                 if (res.ok) {
                   alert(`Reboot command sent successfully for ${name || `Node ${node.nodeId}`}.`);
                 } else {
