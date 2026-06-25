@@ -28,13 +28,22 @@ This guide covers the end-to-end setup of the PoE HVPS Controller ecosystem.
 ## 📊 Step 2: Dashboard Setup
 The dashboard runs as a dockerized stack containing the React frontend and Node.js proxy.
 
-1. Navigate to the `/dashboard` directory.
-2. Build and start the containers:
+1. Navigate to the `/dashboard` or `/dashboard/app` directory.
+2. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+3. Set the `DASHBOARD_API_TOKEN` environment variable in `.env`. The token MUST be at least 16 characters long. Generate one using:
+   ```bash
+   openssl rand -hex 32
+   ```
+4. Build and start the containers:
    ```bash
    docker-compose up -d --build
    ```
-3. Access the UI at `http://localhost:3000`.
-4. Configure your 10 nodes in `config/nodes.json`.
+5. Access the UI at `http://localhost:3000`.
+6. Configure your 10 nodes in `config/nodes.json`.
+7. Navigate to the **Settings** tab on the web dashboard and enter the token into the **API Write Authentication** field. This stores the token in your browser's local storage so that actions like Emergency Stop/Resume and saving limits can be authorized.
 
 ## 🌐 Step 3: Secure Remote Access
 To control the station from anywhere in the world:

@@ -382,13 +382,6 @@ app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
 app.get('/api/infra',      (req, res) => res.json(infraCache));
 app.get('/api/history',    (req, res) => res.json(downsampledHistory));
 
-<<<<<<< HEAD
-app.post('/api/reboot-detector/:id', requireBearer, async (req, res) => {
-  const nodeId = req.params.id;
-  const nodes  = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
-  const target = nodes.find(n => n.id == nodeId);
-  if (target && target.poe_port) {
-=======
 // MikroTik PoE control OID. Values: 1=auto-on, 2=forced-on, 3=off.
 const POE_CONTROL_OID = '1.3.6.1.4.1.14988.1.1.15.1.1.2';
 const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';

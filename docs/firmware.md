@@ -167,7 +167,7 @@ The device advertises itself as `hvps-controller` on the network. During an OTA 
 
 ## Known Limitations
 
-1. **No authentication.** The web dashboard and API are unauthenticated. Acceptable for isolated lab networks but should be addressed before deployment on shared networks.
-2. **No persistent state.** Pot positions reset to 127 (mid-point) on every power cycle. NVS-based persistence could be added.
-3. **No CORS headers.** Cross-origin requests from external dashboards will be blocked by browsers. Add `Access-Control-Allow-Origin: *` header if needed.
+1. **Timing-Safe Write Authentication.** Write/mutation endpoints (`POST /api/reboot-detector`, `POST /api/emergency-stop`, and `POST /api/safety-limits`) are protected via a `DASHBOARD_API_TOKEN` bearer authentication check. Read-only endpoints remain open for public telemetry polling.
+2. **Safe-boot initialisation.** Instead of resetting to mid-point (`127`), both RDAC channels safe-boot to `0` (HV off). Operators must explicitly set target levels post-reboot.
+3. **CORS headers.** The ESP32 firmware now implements `Access-Control-Allow-Origin: *` headers on HTTP endpoints, allowing seamless requests from external or browser-based dashboards.
 4. **Float atomicity.** As noted above, `volatile float` reads are not guaranteed atomic. Acceptable for monitoring but not for safety-critical decisions.
