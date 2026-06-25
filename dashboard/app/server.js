@@ -5,6 +5,7 @@ import path from 'path';
 import fetch from 'node-fetch';
 import mqtt from 'mqtt';
 import snmp from 'net-snmp';
+import { timingSafeEqual } from 'crypto';
 import {
   initLogger,
   logTelemetry,
@@ -76,6 +77,46 @@ mqttClient.on('connect', () => {
 
 app.use(cors());
 app.use(express.json());
+
+// --- Bearer-token auth for write endpoints --------------------------------
+// Read-only telemetry (/api/detectors, /api/digitizer, /api/infra,
+// /api/credits, /api/safety-status) is open so the frontend can poll
+// without ceremony. Anything that MUTATES state -- emergency stop, port
+// reboot -- must carry `Authorization: Bearer <DASHBOARD_API_TOKEN>`.
+//
+// Fail-safe: if DASHBOARD_API_TOKEN is unset OR shorter than 16 chars,
+// EVERY write request returns 503. We never accidentally serve writes
+// to an unauthenticated client just because someone forgot to set the
+// env var.
+const DASHBOARD_API_TOKEN = process.env.DASHBOARD_API_TOKEN || '';
+
+if (!DASHBOARD_API_TOKEN || DASHBOARD_API_TOKEN.length < 16) {
+  console.warn(`[AUTH] DASHBOARD_API_TOKEN unset or too short (<16 chars). Write endpoints DISABLED.`);
+} else {
+  console.log(`[AUTH] Write endpoints protected by bearer token (length=${DASHBOARD_API_TOKEN.length}).`);
+}
+
+// Timing-safe string compare so attackers can't infer the token byte-by-byte
+// from response timing.
+function _safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+function requireBearer(req, res, next) {
+  if (!DASHBOARD_API_TOKEN || DASHBOARD_API_TOKEN.length < 16) {
+    return res.status(503).json({ error: 'write endpoints disabled; DASHBOARD_API_TOKEN not configured' });
+  }
+  const header = req.get('authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(header);
+  if (!m) return res.status(401).json({ error: 'missing or malformed Authorization header' });
+  if (!_safeCompare(m[1], DASHBOARD_API_TOKEN)) {
+    return res.status(403).json({ error: 'invalid bearer token' });
+  }
+  next();
+}
+
 
 // Paths to configurations
 const NODES_CONFIG   = process.env.NODES_CONFIG || '../config/nodes.json';
@@ -306,7 +347,7 @@ app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
 app.get('/api/infra',      (req, res) => res.json(infraCache));
 app.get('/api/history',    (req, res) => res.json(downsampledHistory));
 
-app.post('/api/reboot-detector/:id', async (req, res) => {
+app.post('/api/reboot-detector/:id', requireBearer, async (req, res) => {
   const nodeId = req.params.id;
   const nodes  = JSON.parse(await fs.readFile(NODES_CONFIG, 'utf-8'));
   const target = nodes.find(n => n.id == nodeId);
@@ -367,7 +408,7 @@ app.post('/api/safety-limits', async (req, res) => {
   }
 });
 
-app.post('/api/emergency-stop', async (req, res) => {
+app.post('/api/emergency-stop', requireBearer, async (req, res) => {
   try {
     const active  = !!(req.body && req.body.active);
     const reason  = (req.body && req.body.reason) || `api:${req.ip || 'unknown'}`;
