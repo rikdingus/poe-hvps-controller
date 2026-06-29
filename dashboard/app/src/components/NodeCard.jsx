@@ -214,13 +214,13 @@ export default function NodeCard({ node }) {
                   headers
                 });
                 if (res.ok) {
-                  alert(`Reboot command sent successfully for ${name || `Node ${node.nodeId}`}.`);
+                  window.alert(`Reboot command sent successfully for ${name || `Node ${node.nodeId}`}.`);
                 } else {
                   const err = await res.json();
-                  alert(`Failed to reboot: ${err.error || res.statusText}`);
+                  window.alert(`Failed to reboot: ${err.error || res.statusText}`);
                 }
               } catch (e) {
-                alert(`Network error: ${e.message}`);
+                window.alert(`Network error: ${e.message}`);
               } finally {
                 if (btn) btn.disabled = false;
               }
