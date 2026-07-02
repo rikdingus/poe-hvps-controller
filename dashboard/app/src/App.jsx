@@ -83,6 +83,7 @@ export default function App() {
   const [infra,             setInfra]             = useState({ voltage: 0, temp: 0, cpu: 0, lastSeen: null, error: 'Connecting...' });
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false);
   const [eStopPending,      setEStopPending]      = useState(false);
+  const [estopError,        setEstopError]        = useState(null);
   const [view,              setView]              = useState('dashboard');
 
   const fetchDownsampledHistory = useCallback(async () => {
@@ -105,19 +106,26 @@ export default function App() {
 
   const handleEmergencyStop = useCallback(async () => {
     setEStopPending(true);
+    // Never claim the power cut succeeded unless the backend confirmed it.
     try {
       const headers = { 'Content-Type': 'application/json' };
       const token = localStorage.getItem('DASHBOARD_API_TOKEN');
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      await fetch('/api/emergency-stop', {
+      const res = await fetch('/api/emergency-stop', {
         method: 'POST',
         headers,
         body: JSON.stringify({ active: true, reason: 'dashboard-halt-button' }),
       });
+      if (res.ok) {
+        setEstopError(null);
+      } else {
+        setEstopError(`Backend halt call FAILED (HTTP ${res.status}) — PoE power cut NOT confirmed. Verify hardware!`);
+      }
     } catch (e) {
       console.error('[E-STOP] Server unreachable:', e.message);
+      setEstopError('Server unreachable — PoE power cut NOT confirmed. Verify hardware!');
     }
     setIsEmergencyStopped(true);
     setDetectors(prev => prev.map(d => ({
@@ -129,21 +137,28 @@ export default function App() {
   }, []);
 
   const handleResume = useCallback(async () => {
+    // Only drop the halt overlay when the backend confirms the resume.
     try {
       const headers = { 'Content-Type': 'application/json' };
       const token = localStorage.getItem('DASHBOARD_API_TOKEN');
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      await fetch('/api/emergency-stop', {
+      const res = await fetch('/api/emergency-stop', {
         method: 'POST',
         headers,
         body: JSON.stringify({ active: false, reason: 'dashboard-resume' }),
       });
+      if (res.ok) {
+        setEstopError(null);
+        setIsEmergencyStopped(false);
+      } else {
+        setEstopError(`Resume FAILED (HTTP ${res.status}) — backend may still be halted. Retry or check the server.`);
+      }
     } catch (e) {
       console.error('[E-STOP] Resume call failed:', e.message);
+      setEstopError(`Resume call failed (${e.message}) — backend may still be halted. Retry or check the server.`);
     }
-    setIsEmergencyStopped(false);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -162,30 +177,13 @@ export default function App() {
       setDigitizer(liveDig);
       setInfra(liveInfra);
 
-      if (liveDets && liveDets.length > 0) {
-        setDetectors(liveDets);
-        setHistory(prev => [...prev.slice(-29), {
-          time: new Date().toLocaleTimeString(),
-          rate: parseFloat(liveDig.triggerRate)
-        }]);
-      } else {
-        const mockDets = Array.from({ length: 4 }, (_, i) => ({
-          nodeId: i + 1,
-          name: `Detector-${i + 1}`,
-          status: 'online',
-          channels: [
-            { ch: 1, target_kv: 1.2, current_kv: 1.2 + (Math.random()*0.02), limit_kv: 2.5 },
-            { ch: 2, target_kv: 1.2, current_kv: 1.15 + (Math.random()*0.02), limit_kv: 2.5 }
-          ],
-          power: { v: 48.2, a: 0.12, w: 5.8 },
-          ups: { battery_pct: 100, source: 'dc' }
-        }));
-        setDetectors(mockDets);
-        setHistory(prev => [...prev.slice(-29), {
-          time: new Date().toLocaleTimeString(),
-          rate: parseFloat((Math.random() * 5 + 2).toFixed(2))
-        }]);
-      }
+      // Show exactly what the backend reports — never fabricate "online" nodes
+      // (a fake-green detector grid is worse than an honest empty state).
+      setDetectors(Array.isArray(liveDets) ? liveDets : []);
+      setHistory(prev => [...prev.slice(-29), {
+        time: new Date().toLocaleTimeString(),
+        rate: Number.parseFloat(liveDig.triggerRate) || 0
+      }]);
     } catch (e) {
       console.error('Korstmos Fetch Error:', e);
     }
@@ -244,8 +242,15 @@ export default function App() {
               ACQUISITION HALTED
             </h1>
             <p className="text-gray-500 tracking-widest uppercase text-sm font-bold">
-              Scientific Override Active — PoE power cut to all detectors
+              {estopError ? 'Scientific Override requested' : 'Scientific Override Active — PoE power cut to all detectors'}
             </p>
+            {estopError && (
+              <div className="mt-6 bg-amber-50 border-2 border-amber-500 p-4 max-w-xl mx-auto">
+                <p className="text-amber-700 text-xs font-black uppercase tracking-wider leading-snug flex items-center gap-2 justify-center">
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {estopError}
+                </p>
+              </div>
+            )}
             <button
               onClick={handleResume}
               className="mt-12 px-12 py-4 bg-[#be2c2e] text-white text-sm font-black uppercase tracking-widest hover:bg-[#7a0000]"
@@ -312,11 +317,21 @@ export default function App() {
 
         <main className="col-span-8">
           {view === 'dashboard' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {detectors.map(det => (
-                <NodeCard key={det.nodeId} node={det} />
-              ))}
-            </div>
+            detectors.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {detectors.map(det => (
+                  <NodeCard key={det.nodeId} node={det} />
+                ))}
+              </div>
+            ) : (
+              <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 bg-white/50 text-center px-8">
+                <AlertTriangle className="w-8 h-8 text-gray-400 mb-4" />
+                <p className="text-sm font-black text-gray-600 uppercase tracking-widest">No detector telemetry</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-2 leading-relaxed">
+                  The backend is reporting zero nodes — check the API connection,<br />NODES_CONFIG, or the node network before trusting this view.
+                </p>
+              </div>
+            )
           ) : view === 'analytics' ? (
             <Analytics history={history} detectors={detectors} downsampledHistory={downsampledHistory} />
           ) : (

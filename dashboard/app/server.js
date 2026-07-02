@@ -22,6 +22,7 @@ import {
     emergencyShutdown,
     fetchWithDigest,
     parseSwosResponse,
+    setPoeState,
 } from './safety_guardian.js';
 import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
 import { synthDemoStatus, synthDemoInfra, synthDemoPoe } from './demo_fixture.js';
@@ -391,24 +392,6 @@ app.get('/api/digitizer',  (req, res) => res.json(digitizerCache));
 app.get('/api/infra',      (req, res) => res.json(infraCache));
 app.get('/api/history',    (req, res) => res.json(downsampledHistory));
 
-// MikroTik PoE control OID. Values: 1=auto-on, 2=forced-on, 3=off.
-const POE_CONTROL_OID = '1.3.6.1.4.1.14988.1.1.15.1.1.2';
-const SNMP_COMMUNITY_WRITE = process.env.SNMP_COMMUNITY_WRITE || 'private';
-
-// Set a single PoE port to a desired RouterOS state. Resolves on success,
-// rejects on SNMP error. Uses a short-lived session per call so a stuck
-// session can't poison subsequent reboots.
-function setPoeState(port, state) {
-  return new Promise((resolve, reject) => {
-    const s = snmp.createSession(MIKROTIK_IP, SNMP_COMMUNITY_WRITE, { timeout: 2000, retries: 1 });
-    const oid = `${POE_CONTROL_OID}.${port}`;
-    s.set([{ oid, type: snmp.ObjectType.Integer, value: state }], (err) => {
-      s.close();
-      err ? reject(err) : resolve();
-    });
-  });
-}
-
 // PoE off duration during a reboot cycle. ~3s lets ESP32 fully power down
 // and bleed off rail capacitance. Configurable for fast-iteration test rigs.
 const POE_REBOOT_OFF_MS = Number(process.env.POE_REBOOT_OFF_MS || 3000);
@@ -456,7 +439,7 @@ app.post('/api/reboot-detector/:id', requireBearer, async (req, res) => {
 
   // Step 1: off. Fail-fast -- if we can't even cut power, don't pretend.
   try {
-    await setPoeState(target.poe_port, 3);
+    await setPoeState(target.poe_port, 0); // 0 = off
     result.off_set = true;
   } catch (e) {
     console.error(`[KORSTMOS] reboot off-step failed for node ${nodeId}: ${e.message}`);
