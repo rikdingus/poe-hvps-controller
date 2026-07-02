@@ -27,7 +27,7 @@ import { mapStatusToNode, buildOfflineNode } from './node_mapper.js';
 import { synthDemoStatus, synthDemoInfra, synthDemoPoe } from './demo_fixture.js';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // DEMO_MODE: synthesize telemetry instead of doing real fetch/SNMP/MQTT I/O.
 // Default is OFF -- the real hardware path is completely unchanged.
@@ -74,7 +74,16 @@ const OIDS = {
 
 // MQTT Bridge Configuration
 const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://localhost:1883';
-const mqttClient = mqtt.connect(MQTT_BROKER);
+// DEMO_MODE does all I/O synthetically -- a real broker connection would just
+// loop ECONNREFUSED reconnects (~1/s of journald spam) whenever no HA broker
+// is running. Use an inert stub instead; publishes become no-ops.
+const mqttClient = DEMO_MODE
+  ? { publish: () => {}, on: () => {} }
+  : mqtt.connect(MQTT_BROKER);
+
+if (DEMO_MODE) {
+  console.log('[MQTT] DEMO_MODE -- broker connection disabled, publishes are no-ops');
+}
 
 mqttClient.on('connect', () => {
   console.log(`Connected to Home Assistant MQTT Broker at ${MQTT_BROKER}`);
