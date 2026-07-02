@@ -18,6 +18,8 @@
 //  for that separate (already-drafted) effort.
 // =====================================================================
 
+import { virtualPoePorts } from './safety_guardian.js';
+
 // Must match the channel_overrides key in dashboard/config/safety_limits.json
 const OVERRIDE_NODE_NAME = 'HVPS-07';
 
@@ -31,6 +33,10 @@ const OVERRIDE_NODE_NAME = 'HVPS-07';
  * @param {object} nodeConfig one entry from nodes.demo.json
  */
 export function synthDemoStatus(nodeConfig) {
+  const port = nodeConfig.poe_port;
+  if (port && virtualPoePorts[port] === 0) {
+    return null;
+  }
   const t = Date.now() / 1000;
   const phase = (nodeConfig.id || 0) * 0.7;
 
@@ -83,11 +89,15 @@ export function synthDemoPoe(ports) {
   const t = Date.now() / 1000;
   const out = {};
   for (const port of ports) {
-    const phase = port * 0.5;
-    const voltage = Number((54 + 0.4 * Math.sin(t / 30 + phase) + (Math.random() - 0.5) * 0.1).toFixed(1));
-    const current = Math.round(180 + 50 * Math.sin(t / 25 + phase) + (Math.random() - 0.5) * 6);
-    const power = Number((voltage * current / 1000).toFixed(1));
-    out[port] = { voltage, current, power };
+    if (virtualPoePorts[port] === 0) {
+      out[port] = { voltage: 0, current: 0, power: 0 };
+    } else {
+      const phase = port * 0.5;
+      const voltage = Number((54 + 0.4 * Math.sin(t / 30 + phase) + (Math.random() - 0.5) * 0.1).toFixed(1));
+      const current = Math.round(180 + 50 * Math.sin(t / 25 + phase) + (Math.random() - 0.5) * 6);
+      const power = Number((voltage * current / 1000).toFixed(1));
+      out[port] = { voltage, current, power };
+    }
   }
   return out;
 }

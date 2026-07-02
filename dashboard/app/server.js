@@ -295,6 +295,9 @@ const pollDetectors = async () => {
 
         if (DEMO_MODE) {
           rawStatus = synthDemoStatus(node);
+          if (!rawStatus) {
+            mapped = buildOfflineNode(node, 'offline', 'PoE power cut');
+          }
         } else {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 1500);

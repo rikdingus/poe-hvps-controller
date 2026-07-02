@@ -12,7 +12,7 @@ import { Activity, Zap, TrendingUp, Clock } from 'lucide-react';
 //   detectors - array of detector node objects
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Analytics({ history = [], detectors = [], downsampledHistory = [] }) {
+export default function Analytics({ history = [], detectors = [], downsampledHistory = [], darkMode }) {
   const [activeTab, setActiveTab] = React.useState('rate');
 
   const avgRate = history.length
@@ -40,31 +40,33 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
 
       {/* ── Summary stats ─────────────────────────────────────────── */}
       <div className="grid grid-cols-4 gap-6">
-        <StatCard icon={<Activity className="w-4 h-4" />} label="Avg Rate"    value={avgRate} unit="Hz" />
-        <StatCard icon={<TrendingUp className="w-4 h-4" />} label="Peak Rate" value={maxRate} unit="Hz" />
-        <StatCard icon={<Zap className="w-4 h-4" />}   label="Online"         value={onlineCount}  unit="nodes" color="text-emerald-600" />
-        <StatCard icon={<Clock className="w-4 h-4" />} label="Offline"        value={offlineCount} unit="nodes" color={offlineCount > 0 ? 'text-[#be2c2e]' : undefined} />
+        <StatCard icon={<Activity className="w-4 h-4" />} label="Avg Rate"    value={avgRate} unit="Hz" darkMode={darkMode} />
+        <StatCard icon={<TrendingUp className="w-4 h-4" />} label="Peak Rate" value={maxRate} unit="Hz" darkMode={darkMode} />
+        <StatCard icon={<Zap className="w-4 h-4" />}   label="Online"         value={onlineCount}  unit="nodes" color="text-emerald-500" darkMode={darkMode} />
+        <StatCard icon={<Clock className="w-4 h-4" />} label="Offline"        value={offlineCount} unit="nodes" color={offlineCount > 0 ? 'text-[#be2c2e]' : undefined} darkMode={darkMode} />
       </div>
 
       {/* ── Historical Trend charts ───────────────────────────────── */}
-      <div className="bg-white border border-[#e5e5e5] p-8">
+      <div className={`${darkMode ? 'bg-[#151722] border-[#222533]' : 'bg-white border-[#e5e5e5]'} border p-8`}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-[10px] uppercase font-black tracking-widest text-[#be2c2e] flex items-center gap-2">
             <Activity className="w-3 h-3" /> Downsampled Telemetry History
           </h2>
-          <span className="text-[9px] uppercase font-bold text-gray-500">
+          <span className={`text-[9px] uppercase font-bold ${darkMode ? 'text-zinc-400' : 'text-gray-500'}`}>
             {chartData.length} records loaded
           </span>
         </div>
 
         {/* Tab Selectors */}
-        <div className="flex gap-4 mb-6 border-b border-gray-100 pb-2">
+        <div className={`flex gap-4 mb-6 border-b pb-2 ${darkMode ? 'border-zinc-800' : 'border-gray-100'}`}>
           <button
             onClick={() => setActiveTab('rate')}
             className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest border-b-2 transition-all ${
               activeTab === 'rate' 
                 ? 'border-[#be2c2e] text-[#be2c2e]' 
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                : darkMode 
+                  ? 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             Trigger Rate
@@ -74,7 +76,9 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
             className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest border-b-2 transition-all ${
               activeTab === 'voltage' 
                 ? 'border-[#d97706] text-[#d97706]' 
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                : darkMode 
+                  ? 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             Bus Voltage
@@ -84,7 +88,9 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
             className={`px-4 py-2 font-black text-[10px] uppercase tracking-widest border-b-2 transition-all ${
               activeTab === 'temp' 
                 ? 'border-[#2563eb] text-[#2563eb]' 
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                : darkMode 
+                  ? 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
             Lab Temperature
@@ -109,24 +115,31 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
                     />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#222533' : '#f0f0f0'} />
                 <XAxis
                   dataKey="time"
-                  tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700 }}
+                  tick={{ fontSize: 8, fill: darkMode ? '#8b92a5' : '#4b5563', fontWeight: 700 }}
                   tickLine={false}
-                  axisLine={{ stroke: '#e5e5e5' }}
+                  axisLine={{ stroke: darkMode ? '#222533' : '#e5e5e5' }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 8, fill: '#4b5563', fontWeight: 700 }}
+                  tick={{ fontSize: 8, fill: darkMode ? '#8b92a5' : '#4b5563', fontWeight: 700 }}
                   tickLine={false}
                   axisLine={false}
                   domain={['auto', 'auto']}
                   unit={activeTab === 'rate' ? ' Hz' : activeTab === 'voltage' ? ' V' : ' °C'}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 0, fontSize: 11, fontWeight: 700 }}
-                  labelStyle={{ color: '#4b5563', textTransform: 'uppercase', fontSize: 9 }}
+                  contentStyle={{ 
+                    background: darkMode ? '#151722' : '#fff', 
+                    border: `1px solid ${darkMode ? '#222533' : '#e5e5e5'}`, 
+                    borderRadius: 0, 
+                    fontSize: 11, 
+                    fontWeight: 700,
+                    color: darkMode ? '#fff' : '#1d1d1b'
+                  }}
+                  labelStyle={{ color: darkMode ? '#8b92a5' : '#4b5563', textTransform: 'uppercase', fontSize: 9 }}
                   formatter={(v) => [
                     activeTab === 'rate' ? `${Number(v).toFixed(2)} Hz` : activeTab === 'voltage' ? `${Number(v).toFixed(1)} V` : `${Number(v).toFixed(1)} °C`,
                     activeTab === 'rate' ? 'Rate' : activeTab === 'voltage' ? 'Voltage' : 'Temp'
@@ -150,16 +163,16 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
       </div>
 
       {/* ── Per-detector HV table ─────────────────────────────────── */}
-      <div className="bg-white border border-[#e5e5e5] p-8">
+      <div className={`${darkMode ? 'bg-[#151722] border-[#222533]' : 'bg-white border-[#e5e5e5]'} border p-8`}>
         <h2 className="text-[10px] uppercase font-black tracking-widest text-[#be2c2e] mb-6 flex items-center gap-2">
           <Zap className="w-3 h-3" /> Detector HV Summary
         </h2>
         {detectors.length > 0 ? (
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-[#e5e5e5]">
+              <tr className={`border-b ${darkMode ? 'border-zinc-800' : 'border-[#e5e5e5]'}`}>
                 {['Node', 'Status', 'CH1 HV', 'POE V', 'POE A', 'Power'].map(h => (
-                  <th key={h} className="text-[8px] uppercase font-black text-gray-600 tracking-widest text-left py-2 pr-4">{h}</th>
+                  <th key={h} className={`text-[8px] uppercase font-black tracking-widest text-left py-2 pr-4 ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -168,11 +181,11 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
                 const ch1  = d.channels?.[0];
                 const pwr  = d.power;
                 return (
-                  <tr key={d.nodeId} className="border-b border-[#f8f8f8] hover:bg-[#fafafa]">
-                    <td className="py-2.5 pr-4 font-black text-[#1d1d1b]">{d.name}</td>
+                  <tr key={d.nodeId} className={`border-b ${darkMode ? 'border-zinc-900/60 hover:bg-[#1a1d2b]' : 'border-[#f8f8f8] hover:bg-[#fafafa]'}`}>
+                    <td className={`py-2.5 pr-4 font-black ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>{d.name}</td>
                     <td className="py-2.5 pr-4">
                       <span className={`text-[8px] font-black uppercase ${
-                        d.status === 'online' ? 'text-emerald-600' : 'text-[#be2c2e]'
+                        d.status === 'online' ? 'text-emerald-400' : 'text-[#be2c2e]'
                       }`}>{d.status}</span>
                     </td>
                     <td className="py-2.5 pr-4 font-mono">
@@ -196,14 +209,16 @@ export default function Analytics({ history = [], detectors = [], downsampledHis
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function StatCard({ icon, label, value, unit, color = 'text-[#1d1d1b]' }) {
+function StatCard({ icon, label, value, unit, color, darkMode }) {
+  const defaultColor = darkMode ? 'text-white' : 'text-[#1d1d1b]';
+  const actualColor = color || defaultColor;
   return (
-    <div className="bg-white border border-[#e5e5e5] p-6">
-      <p className="text-[8px] uppercase font-black text-gray-600 tracking-widest mb-2 flex items-center gap-1.5">
+    <div className={`${darkMode ? 'bg-[#151722] border-[#222533]' : 'bg-white border-[#e5e5e5]'} border p-6`}>
+      <p className={`text-[8px] uppercase font-black tracking-widest mb-2 flex items-center gap-1.5 ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>
         {icon}{label}
       </p>
-      <p className={`text-3xl font-black ${color}`}>
-        {value} <span className="text-sm text-gray-600 font-bold">{unit}</span>
+      <p className={`text-3xl font-black ${actualColor}`}>
+        {value} <span className={`text-sm font-bold ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>{unit}</span>
       </p>
     </div>
   );

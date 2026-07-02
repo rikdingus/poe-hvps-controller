@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Activity, ShieldCheck, Zap, Settings, Gauge, TrendingUp, LayoutDashboard, Cpu, Radio, AlertTriangle } from 'lucide-react';
+import { Activity, ShieldCheck, Zap, Settings, Gauge, TrendingUp, LayoutDashboard, Cpu, Radio, AlertTriangle, Sun, Moon } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 import NodeCard from './components/NodeCard';
 import Analytics from './components/Analytics';
@@ -7,34 +7,34 @@ import SettingsView from './components/Settings';
 
 // ─── Sub-widgets ──────────────────────────────────────────────────────────────
 
-const DigitizerWidget = ({ data }) => {
+const DigitizerWidget = ({ data, darkMode }) => {
   if (!data) return null;
   return (
-    <div className="bg-white border border-[#e5e5e5] p-8 mb-8">
+    <div className={`${darkMode ? 'bg-[#151722] border-[#222533]' : 'bg-white border-[#e5e5e5]'} border p-8 mb-8`}>
       <h3 className="text-[10px] uppercase text-[#be2c2e] mb-6 flex items-center gap-2 font-black tracking-widest">
         <Cpu className="w-3 h-3" /> Central Digitizer (KORSTMOS)
       </h3>
       <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Trigger Rate</span>
-            <span className="text-4xl font-black text-[#1d1d1b]">{data.triggerRate} <span className="text-sm">Hz</span></span>
+            <span className={`text-[9px] uppercase font-black mb-1 tracking-widest ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Trigger Rate</span>
+            <span className={`text-4xl font-black ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>{data.triggerRate} <span className="text-sm">Hz</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Coincidence</span>
+            <span className={`text-[9px] uppercase font-black mb-1 tracking-widest ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Coincidence</span>
             <span className="text-xl font-black text-[#be2c2e] uppercase">{data.coincidenceMode}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-[#fafafa] p-4 border border-gray-100">
-            <span className="text-[8px] uppercase text-gray-600 font-black block mb-1">Active Plates</span>
-            <span className="text-lg font-black text-[#1d1d1b]">{data.activeChannels}</span>
+          <div className={`${darkMode ? 'bg-[#1a1d2b] border-[#262a3d]' : 'bg-[#fafafa] border-gray-100'} p-4 border`}>
+            <span className={`text-[8px] uppercase font-black block mb-1 ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Active Plates</span>
+            <span className={`text-lg font-black ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>{data.activeChannels}</span>
           </div>
-          <div className="bg-[#fafafa] p-4 border border-gray-100 text-right">
-            <span className="text-[8px] uppercase text-gray-600 font-black block mb-1">Muon Pulse</span>
+          <div className={`${darkMode ? 'bg-[#1a1d2b] border-[#262a3d]' : 'bg-[#fafafa] border-gray-100'} p-4 border text-right`}>
+            <span className={`text-[8px] uppercase font-black block mb-1 ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Muon Pulse</span>
             <div className="flex items-center justify-end gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
-              <span className="text-lg font-black text-[#1d1d1b]">LIVE</span>
+              <span className={`text-lg font-black ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>LIVE</span>
             </div>
           </div>
         </div>
@@ -43,11 +43,11 @@ const DigitizerWidget = ({ data }) => {
   );
 };
 
-const InfraWidget = ({ data }) => {
+const InfraWidget = ({ data, darkMode }) => {
   if (!data) return null;
   const isOffline = !data.lastSeen;
   return (
-    <div className="bg-white border border-[#e5e5e5] p-8 mb-8">
+    <div className={`${darkMode ? 'bg-[#151722] border-[#222533]' : 'bg-white border-[#e5e5e5]'} border p-8 mb-8`}>
       <h3 className="text-[10px] uppercase text-[#be2c2e] mb-6 flex items-center gap-2 font-black tracking-widest w-full">
         <Settings className="w-3 h-3" /> Facility Infrastructure
         {isOffline && <span className="text-[8px] text-[#be2c2e] font-black uppercase ml-auto border border-[#be2c2e]/20 px-1.5 py-0.5 animate-pulse">Offline</span>}
@@ -55,16 +55,16 @@ const InfraWidget = ({ data }) => {
       <div className="space-y-6">
         <div className="flex justify-between items-end">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Bus Voltage</span>
+            <span className={`text-[9px] uppercase font-black mb-1 tracking-widest ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Bus Voltage</span>
             <span className="text-3xl font-black text-[#be2c2e]">{isOffline ? '--' : `${(data.voltage ?? 0).toFixed(1)}`} <span className="text-sm">V</span></span>
           </div>
           <div className="flex flex-col items-end">
-            <span className="text-[9px] uppercase text-gray-600 font-black mb-1 tracking-widest">Lab Temp</span>
-            <span className="text-3xl font-black text-[#1d1d1b]">{isOffline ? '--' : `${(data.temp ?? 0).toFixed(1)}°C`}</span>
+            <span className={`text-[9px] uppercase font-black mb-1 tracking-widest ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Lab Temp</span>
+            <span className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>{isOffline ? '--' : `${(data.temp ?? 0).toFixed(1)}°C`}</span>
           </div>
         </div>
         {isOffline && data.error && (
-          <div className="bg-red-50/50 border border-[#be2c2e]/10 p-2 mt-2">
+          <div className={`border p-2 mt-2 ${darkMode ? 'bg-red-950/20 border-[#be2c2e]/20' : 'bg-red-50/50 border-[#be2c2e]/10'}`}>
             <p className="text-[8px] text-[#be2c2e] font-black uppercase tracking-wider leading-tight">{data.error}</p>
           </div>
         )}
@@ -84,6 +84,7 @@ export default function App() {
   const [isEmergencyStopped, setIsEmergencyStopped] = useState(false);
   const [eStopPending,      setEStopPending]      = useState(false);
   const [view,              setView]              = useState('dashboard');
+  const [darkMode,          setDarkMode]          = useState(true);
 
   const fetchDownsampledHistory = useCallback(async () => {
     try {
@@ -198,8 +199,8 @@ export default function App() {
   }, [fetchData]);
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-[#1d1d1b]">
-      <header className="bg-white border-b border-[#e5e5e5] px-12 py-8 mb-12 shadow-sm">
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0d0e12] text-[#e3e5eb]' : 'bg-[#f8f9fa] text-[#1d1d1b]'}`}>
+      <header className={`${darkMode ? 'bg-[#151722] border-b border-[#222533]' : 'bg-white border-b border-[#e5e5e5]'} px-12 py-8 mb-12 shadow-sm transition-colors duration-300`}>
         <div className="max-w-[1700px] mx-auto flex justify-between items-end">
           <div className="flex items-center gap-8">
             <div className="w-16 h-16 bg-[#be2c2e] flex items-center justify-center text-white">
@@ -207,16 +208,16 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-4xl font-black tracking-tighter uppercase leading-none text-[#be2c2e]">
-                Project <span className="text-[#1d1d1b]">Korstmos</span>
+                Project <span className={darkMode ? 'text-white' : 'text-[#1d1d1b]'}>Korstmos</span>
               </h1>
-              <p className="text-[10px] uppercase tracking-[0.4em] font-bold mt-2 text-gray-600">
+              <p className={`text-[10px] uppercase tracking-[0.4em] font-bold mt-2 ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>
                 Kosmisch Onderzoek Radboud Studenten Meetopstelling
               </p>
             </div>
           </div>
           <div className="flex gap-6 items-center">
             <div className="text-right">
-              <p className="text-[9px] uppercase font-black text-gray-600 tracking-widest">Array Status</p>
+              <p className={`text-[9px] uppercase font-black tracking-widest ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>Array Status</p>
               <p className="text-sm font-bold flex items-center gap-2 justify-end">
                 {isEmergencyStopped ? (
                   <><span className="w-2 h-2 rounded-full bg-[#be2c2e]"></span> Halted</>
@@ -225,6 +226,17 @@ export default function App() {
                 )}
               </p>
             </div>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`p-3 border rounded transition-colors ${
+                darkMode 
+                  ? 'border-[#222533] bg-[#151722] hover:bg-[#1a1d2b] text-[#38bdf8]' 
+                  : 'border-gray-200 bg-white hover:bg-gray-50 text-amber-500'
+              }`}
+              title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <button
               onClick={handleEmergencyStop}
               disabled={eStopPending || isEmergencyStopped}
@@ -237,7 +249,7 @@ export default function App() {
       </header>
 
       {isEmergencyStopped && (
-        <div className="fixed inset-0 z-50 bg-white/90 backdrop-blur-md flex flex-col items-center justify-center">
+        <div className={`fixed inset-0 z-50 backdrop-blur-md flex flex-col items-center justify-center ${darkMode ? 'bg-[#0d0e12]/90' : 'bg-white/90'}`}>
           <div className="text-center p-16 border-4 border-[#be2c2e]">
             <ShieldCheck className="w-24 h-24 text-[#be2c2e] mx-auto mb-6" />
             <h1 className="text-7xl font-black tracking-tighter text-[#be2c2e] mb-4 uppercase italic">
@@ -262,7 +274,11 @@ export default function App() {
             <button
               onClick={() => setView('dashboard')}
               className={`w-full px-8 py-5 text-left font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center gap-4 ${
-                view === 'dashboard' ? 'bg-[#be2c2e] text-white' : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e]'
+                view === 'dashboard'
+                  ? 'bg-[#be2c2e] text-white'
+                  : darkMode
+                    ? 'bg-[#151722] border border-[#222533] text-zinc-300 hover:border-[#be2c2e]'
+                    : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e] text-[#1d1d1b]'
               }`}
             >
               <LayoutDashboard className="w-4 h-4" /> Detector Array
@@ -270,7 +286,11 @@ export default function App() {
             <button
               onClick={() => setView('analytics')}
               className={`w-full px-8 py-5 text-left font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center gap-4 ${
-                view === 'analytics' ? 'bg-[#be2c2e] text-white' : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e]'
+                view === 'analytics'
+                  ? 'bg-[#be2c2e] text-white'
+                  : darkMode
+                    ? 'bg-[#151722] border border-[#222533] text-zinc-300 hover:border-[#be2c2e]'
+                    : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e] text-[#1d1d1b]'
               }`}
             >
               <TrendingUp className="w-4 h-4" /> Event History
@@ -278,17 +298,21 @@ export default function App() {
             <button
               onClick={() => setView('settings')}
               className={`w-full px-8 py-5 text-left font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center gap-4 ${
-                view === 'settings' ? 'bg-[#be2c2e] text-white' : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e]'
+                view === 'settings'
+                  ? 'bg-[#be2c2e] text-white'
+                  : darkMode
+                    ? 'bg-[#151722] border border-[#222533] text-zinc-300 hover:border-[#be2c2e]'
+                    : 'bg-white border border-[#e5e5e5] hover:border-[#be2c2e] text-[#1d1d1b]'
               }`}
             >
               <Settings className="w-4 h-4" /> Settings
             </button>
           </nav>
 
-          <DigitizerWidget data={digitizer} />
-          <InfraWidget data={infra} />
+          <DigitizerWidget data={digitizer} darkMode={darkMode} />
+          <InfraWidget data={infra} darkMode={darkMode} />
 
-          <div className="bg-white border border-[#e5e5e5] p-8">
+          <div className={`${darkMode ? 'bg-[#151722] border-[#222533]' : 'bg-white border-[#e5e5e5]'} border p-8`}>
             <h3 className="text-[11px] uppercase text-[#be2c2e] mb-8 font-black tracking-widest flex items-center gap-3">
               Trigger Rate (Hz)
             </h3>
@@ -301,7 +325,7 @@ export default function App() {
                     stroke="#be2c2e"
                     strokeWidth={3}
                     fill="#be2c2e"
-                    fillOpacity={0.05}
+                    fillOpacity={darkMode ? 0.15 : 0.05}
                   />
                   <YAxis hide domain={['auto', 'auto']} />
                 </AreaChart>
@@ -314,13 +338,13 @@ export default function App() {
           {view === 'dashboard' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {detectors.map(det => (
-                <NodeCard key={det.nodeId} node={det} />
+                <NodeCard key={det.nodeId} node={det} darkMode={darkMode} />
               ))}
             </div>
           ) : view === 'analytics' ? (
-            <Analytics history={history} detectors={detectors} downsampledHistory={downsampledHistory} />
+            <Analytics history={history} detectors={detectors} downsampledHistory={downsampledHistory} darkMode={darkMode} />
           ) : (
-            <SettingsView />
+            <SettingsView darkMode={darkMode} />
           )}
         </main>
       </div>
