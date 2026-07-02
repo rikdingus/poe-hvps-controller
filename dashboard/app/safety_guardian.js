@@ -206,7 +206,14 @@ export async function getPoePortForNode(nodeId) {
     return nodeId + 1;
 }
 
+export const virtualPoePorts = {};
+
 export async function setPoeState(port, state) {
+    if (process.env.DEMO_MODE === 'true') {
+        virtualPoePorts[port] = state;
+        console.log(`[DEMO_MODE] Mocking setPoeState: port ${port} set to ${state}`);
+        return;
+    }
     const method = process.env.POE_CONTROL_METHOD || 'routeros-snmp';
     
     if (method === 'swos-http') {

@@ -84,6 +84,7 @@ const mqttClient = DEMO_MODE
 
 if (DEMO_MODE) {
   console.log('[MQTT] DEMO_MODE -- broker connection disabled, publishes are no-ops');
+  console.warn('[GUARDIAN] DEMO_MODE -- PoE cut path is MOCKED (virtual ports only, NO hardware writes). Never run production with DEMO_MODE=true.');
 }
 
 mqttClient.on('connect', () => {
@@ -136,6 +137,7 @@ function requireBearer(req, res, next) {
   const header = req.get('authorization') || '';
   const m = /^Bearer\s+(.+)$/i.exec(header);
   if (!m) return res.status(401).json({ error: 'missing or malformed Authorization header' });
+  
   if (!_safeCompare(m[1], DASHBOARD_API_TOKEN)) {
     return res.status(403).json({ error: 'invalid bearer token' });
   }
@@ -304,6 +306,9 @@ const pollDetectors = async () => {
 
         if (DEMO_MODE) {
           rawStatus = synthDemoStatus(node);
+          if (!rawStatus) {
+            mapped = buildOfflineNode(node, 'offline', 'PoE power cut');
+          }
         } else {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 1500);

@@ -1,0 +1,5 @@
+firmware/.pio/
+node_modules/
+dashboard/app/node_modules/
+dist/
+build/

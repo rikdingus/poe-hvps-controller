@@ -1,0 +1,1 @@
+{"config": {"default": true}, "ignores": ["firmware/.pio/**", "**/node_modules/**", "dist/**", "build/**"]}
