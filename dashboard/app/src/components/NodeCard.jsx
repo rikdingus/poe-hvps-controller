@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Zap, BatteryMedium, Plug, Cpu, Activity } from 'lucide-react';
 
 // ─── StatusBadge ─────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ function ChannelRow({ ch, darkMode }) {
         {ch.hz !== undefined && (
           <span className="text-[7px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1">
             <Activity className={`w-2.5 h-2.5 text-emerald-500 ${ch.hz > 0 ? 'animate-pulse' : ''}`} />
-            {ch.hz.toFixed(2)} Hz · {ch.hits.toLocaleString()} hits
+            {ch.hz.toFixed(2)} Hz · {(ch.hits ?? 0).toLocaleString()} hits
           </span>
         )}
         <span className="text-[7px] text-gray-500 font-bold">{limitKv.toFixed(1)} kV max</span>
@@ -83,27 +83,49 @@ function ChannelRow({ ch, darkMode }) {
   );
 }
 
-// ─── Stat ────────────────────────────────────────────────────────────────────
-function Stat({ label, value, icon, darkMode }) {
-  return (
-    <div>
-      <span className={`text-[7px] uppercase font-black block mb-0.5 tracking-widest flex items-center gap-1 ${darkMode ? 'text-zinc-400' : 'text-gray-500'}`}>
-        {icon}{label}
-      </span>
-      <span className={`text-xs font-bold ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>{value}</span>
-    </div>
-  );
-}
-
 // ─── NodeCard ────────────────────────────────────────────────────────────────
 export default function NodeCard({ node, darkMode }) {
+  // Reboot action feedback: idle | confirm | busy | ok | error (non-blocking,
+  // replaces window.confirm/alert so telemetry keeps rendering during actions).
+  const [reboot, setReboot] = useState({ phase: 'idle', msg: '' });
+  const resetTimer = useRef(null);
+  useEffect(() => () => clearTimeout(resetTimer.current), []);
+
   if (!node) return null;
-  const { name, status = 'offline', channels = [], power, ups, alert } = node;
+  // NOTE: prop is renamed on destructure — `alert` would shadow window.alert.
+  const { name, status = 'offline', channels = [], power, ups, alert: nodeAlert } = node;
+  const label = name || `Node ${node.nodeId}`;
   const isOnline = status === 'online';
+
+  const scheduleReset = (delay) => {
+    clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setReboot({ phase: 'idle', msg: '' }), delay);
+  };
+
+  const doReboot = async () => {
+    setReboot({ phase: 'busy', msg: 'Sending reboot command…' });
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('DASHBOARD_API_TOKEN');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/reboot-detector/${node.nodeId}`, { method: 'POST', headers });
+      if (res.ok) {
+        setReboot({ phase: 'ok', msg: `Reboot command sent for ${label}.` });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setReboot({ phase: 'error', msg: `Reboot failed: ${err.error || res.statusText}` });
+      }
+    } catch (e) {
+      setReboot({ phase: 'error', msg: `Network error: ${e.message}` });
+    }
+    scheduleReset(6000);
+  };
 
   const isLimitExceeded = channels.some(ch => (ch.current_kv ?? 0) > (ch.limit_kv ?? 2.5));
 
-  const borderClass = alert || (status === 'error') || isLimitExceeded
+  const borderClass = nodeAlert || (status === 'error') || isLimitExceeded
     ? 'border-[#be2c2e] ring-4 ring-[#be2c2e]/10 shadow-2xl'
     : isOnline
       ? darkMode
@@ -116,7 +138,7 @@ export default function NodeCard({ node, darkMode }) {
   return (
     <div className={`relative border ${borderClass} transition-all duration-300 overflow-hidden`}>
       {/* Institutional Ribbon */}
-      <div className={`h-1.5 w-full ${isOnline ? ((alert || isLimitExceeded) ? 'bg-[#be2c2e]' : 'bg-[#1d1d1b]') : 'bg-gray-200'}`} />
+      <div className={`h-1.5 w-full ${isOnline ? ((nodeAlert || isLimitExceeded) ? 'bg-[#be2c2e]' : 'bg-[#1d1d1b]') : 'bg-gray-200'}`} />
 
       <div className="p-8">
         {/* Header */}
@@ -134,7 +156,7 @@ export default function NodeCard({ node, darkMode }) {
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={status} darkMode={darkMode} />
-            {(alert || isLimitExceeded) && (
+            {(nodeAlert || isLimitExceeded) && (
               <span className="flex items-center gap-1 bg-[#be2c2e]/10 text-[#be2c2e] px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider animate-pulse">
                 <AlertTriangle className="w-3 h-3 text-[#be2c2e]" />
                 {isLimitExceeded ? 'Limit Exceeded' : 'Halted'}
@@ -164,7 +186,7 @@ export default function NodeCard({ node, darkMode }) {
           <div className="space-y-1 text-center">
             <p className={`text-[10px] uppercase font-black tracking-widest ${darkMode ? 'text-zinc-400' : 'text-gray-600'}`}>PoE Current</p>
             <p className={`text-lg font-black ${darkMode ? 'text-white' : 'text-[#1d1d1b]'}`}>
-              {isOnline && (power?.poe_ma != null || node.sensor_ok) ? `${power?.poe_ma ?? ((power?.a * 1000)?.toFixed(0) || '0')}` : '--'} <span className="text-[10px]">mA</span>
+              {isOnline && (power?.poe_ma != null || node.sensor_ok) ? `${power?.poe_ma ?? (Number.isFinite(power?.a) ? Math.round(power.a * 1000) : 0)}` : '--'} <span className="text-[10px]">mA</span>
             </p>
           </div>
           <div className="space-y-1 text-right">
@@ -198,46 +220,57 @@ export default function NodeCard({ node, darkMode }) {
           </div>
         )}
 
-        {/* Actions */}
-        <div className={`mt-6 pt-6 border-t flex justify-end ${darkMode ? 'border-zinc-800/80' : 'border-gray-100'}`}>
-          <button
-            onClick={async () => {
-              if (!window.confirm(`Are you sure you want to hard reboot ${name || `Node ${node.nodeId}`}? This will power-cycle the PoE port.`)) {
-                return;
-              }
-              const btn = document.getElementById(`reboot-btn-${node.nodeId}`);
-              if (btn) btn.disabled = true;
-              try {
-                const headers = { 'Content-Type': 'application/json' };
-                const token = localStorage.getItem('DASHBOARD_API_TOKEN');
-                if (token) {
-                  headers['Authorization'] = `Bearer ${token}`;
-                }
-                const res = await fetch(`/api/reboot-detector/${node.nodeId}`, {
-                  method: 'POST',
-                  headers
-                });
-                if (res.ok) {
-                  window.alert(`Reboot command sent successfully for ${name || `Node ${node.nodeId}`}.`);
-                } else {
-                  const err = await res.json();
-                  window.alert(`Failed to reboot: ${err.error || res.statusText}`);
-                }
-              } catch (e) {
-                window.alert(`Network error: ${e.message}`);
-              } finally {
-                if (btn) btn.disabled = false;
-              }
-            }}
-            id={`reboot-btn-${node.nodeId}`}
-            className={`text-[9px] uppercase font-black tracking-widest px-4 py-2 transition-all disabled:opacity-50 border ${
-              darkMode 
-                ? 'text-[#be2c2e] hover:text-white hover:bg-[#be2c2e] border-[#be2c2e]/40 hover:border-[#be2c2e]' 
-                : 'text-[#be2c2e] hover:text-white hover:bg-[#be2c2e] border border-[#be2c2e]/20 hover:border-[#be2c2e]'
+        {/* Actions — two-step confirm with inline (non-blocking) status feedback */}
+        <div className={`mt-6 pt-6 border-t flex items-center justify-between gap-3 ${darkMode ? 'border-zinc-800/80' : 'border-gray-100'}`}>
+          <span
+            role="status"
+            aria-live="polite"
+            className={`text-[8px] font-black uppercase tracking-wider leading-tight ${
+              reboot.phase === 'error'   ? 'text-[#be2c2e]'
+              : reboot.phase === 'ok'      ? (darkMode ? 'text-emerald-400' : 'text-emerald-600')
+              : reboot.phase === 'confirm' ? 'text-amber-500'
+              : (darkMode ? 'text-zinc-400' : 'text-gray-500')
             }`}
           >
-            Hard Reboot ↺
-          </button>
+            {reboot.phase === 'confirm'
+              ? `Power-cycle the PoE port of ${label}?`
+              : reboot.msg}
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {reboot.phase === 'confirm' && (
+              <button
+                onClick={() => { clearTimeout(resetTimer.current); setReboot({ phase: 'idle', msg: '' }); }}
+                className={`text-[9px] uppercase font-black tracking-widest px-4 py-2 transition-all border ${
+                  darkMode
+                    ? 'text-zinc-400 hover:text-white border-zinc-700 hover:border-zinc-400'
+                    : 'text-gray-500 hover:text-[#1d1d1b] border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (reboot.phase === 'confirm') {
+                  clearTimeout(resetTimer.current);
+                  doReboot();
+                } else if (reboot.phase !== 'busy') {
+                  setReboot({ phase: 'confirm', msg: '' });
+                  scheduleReset(8000); // confirm window auto-expires
+                }
+              }}
+              disabled={reboot.phase === 'busy'}
+              className={`text-[9px] uppercase font-black tracking-widest px-4 py-2 transition-all disabled:opacity-50 border ${
+                reboot.phase === 'confirm'
+                  ? 'bg-[#be2c2e] text-white border-[#be2c2e] hover:bg-[#7a0000]'
+                  : darkMode
+                    ? 'text-[#be2c2e] border-[#be2c2e]/40 hover:text-white hover:bg-[#be2c2e] hover:border-[#be2c2e]'
+                    : 'text-[#be2c2e] border-[#be2c2e]/20 hover:text-white hover:bg-[#be2c2e] hover:border-[#be2c2e]'
+              }`}
+            >
+              {reboot.phase === 'confirm' ? 'Confirm Reboot' : reboot.phase === 'busy' ? 'Rebooting…' : 'Hard Reboot ↺'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
