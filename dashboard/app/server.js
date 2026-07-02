@@ -137,6 +137,7 @@ function requireBearer(req, res, next) {
   const header = req.get('authorization') || '';
   const m = /^Bearer\s+(.+)$/i.exec(header);
   if (!m) return res.status(401).json({ error: 'missing or malformed Authorization header' });
+  
   if (!_safeCompare(m[1], DASHBOARD_API_TOKEN)) {
     return res.status(403).json({ error: 'invalid bearer token' });
   }
